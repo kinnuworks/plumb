@@ -1,0 +1,18 @@
+{
+  "name": "plumb-keeper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/keeper.ts",
+    "once": "tsx src/keeper.ts --once",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "2.21.55"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.10",
+    "tsx": "4.19.2",
+    "typescript": "5.7.2"
+  }
+}

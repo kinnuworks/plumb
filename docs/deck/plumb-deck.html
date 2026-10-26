@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset='utf-8'><title>Plumb</title><style>
+@page { size: 1280px 720px; margin: 0; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; color: #0f172a; background: #fff; }
+section { width: 1280px; height: 720px; padding: 72px 88px; page-break-after: always; display: flex; flex-direction: column; gap: 22px; position: relative; }
+h1 { font-size: 54px; margin: 0; letter-spacing: -0.02em; }
+h2 { font-size: 24px; margin: 0; font-weight: 400; color: #475569; }
+p, li, td { font-size: 26px; line-height: 1.45; }
+.big { font-size: 34px; line-height: 1.4; max-width: 980px; margin-top: 40px; }
+.note { font-size: 20px; color: #475569; }
+ul, ol { margin: 0; padding-left: 30px; display: flex; flex-direction: column; gap: 10px; }
+.stats { display: flex; gap: 28px; margin-top: 20px; }
+.stats div { flex: 1; border: 1px solid #e2e8f0; border-radius: 14px; padding: 26px; }
+.stats b { display: block; font-size: 40px; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 20px; color: #475569; line-height: 1.35; display: block; }
+table { border-collapse: collapse; width: 100%; }
+td { border-top: 1px solid #e2e8f0; padding: 12px 0; font-size: 22px; }
+td:first-child { width: 52%; font-weight: 600; }
+code { font-size: 0.9em; }
+.num { position: absolute; bottom: 36px; right: 88px; font-size: 16px; color: #94a3b8; }
+</style></head><body><section><h1>Plumb</h1><h2>A peg module for MUSD, built from Mezo's own pool, gauge and savings vault.</h2><p class='big'>Stablecoins become standing bids for MUSD just under its price. What they buy earns in sMUSD and is sold back only at $1 or more.</p><div class='num'>1 / 10</div></section><section><h1>The book today</h1><h2>Mezo's main MUSD/mUSDC pool, read from chain on Oct 26</h2><div class='stats'>
+       <div><b>5.3M</b><span>MUSD offered between $0.99 and $1.00</span></div>
+       <div><b>$38,581</b><span>of bids</span></div>
+       <div><b>$0.990</b><span>MUSD price</span></div>
+     </div>
+     <p>Selling 100,000 MUSD into that pool pays $38,556. The rest of the sale finds no buyers.</p><div class='num'>2 / 10</div></section><section><h1>October</h1><h2>USD paid for selling 100,000 MUSD on Mezo, replayed at each block</h2><svg viewBox="0 0 1100 380" width="100%"><line x1="70" x2="1080" y1="340.0" y2="340.0" stroke="#d9dde3"/><text x="60" y="345.0" text-anchor="end" font-size="16" fill="#6b7280">$0k</text><line x1="70" x2="1080" y1="260.0" y2="260.0" stroke="#d9dde3"/><text x="60" y="265.0" text-anchor="end" font-size="16" fill="#6b7280">$25k</text><line x1="70" x2="1080" y1="180.0" y2="180.0" stroke="#d9dde3"/><text x="60" y="185.0" text-anchor="end" font-size="16" fill="#6b7280">$50k</text><line x1="70" x2="1080" y1="100.0" y2="100.0" stroke="#d9dde3"/><text x="60" y="105.0" text-anchor="end" font-size="16" fill="#6b7280">$75k</text><line x1="70" x2="1080" y1="20.0" y2="20.0" stroke="#d9dde3"/><text x="60" y="25.0" text-anchor="end" font-size="16" fill="#6b7280">$100k</text><path d="M70.0,23.1 L103.7,23.1 L137.3,23.1 L171.0,23.2 L204.7,23.2 L238.3,23.1 L272.0,23.1 L305.7,23.1 L339.3,23.1 L373.0,23.1 L406.7,210.6 L440.3,23.3 L474.0,23.3 L507.7,23.0 L541.3,23.0 L575.0,23.1 L608.7,23.0 L642.3,23.1 L676.0,23.1 L709.7,23.1 L743.3,23.1 L777.0,106.6 L810.7,23.4 L844.3,23.4 L878.0,23.4 L911.7,23.4 L945.3,235.5 L979.0,173.5 L1012.7,340.0 L1046.3,332.1 L1080.0,216.6" fill="none" stroke="#0f172a" stroke-width="3"/><circle cx="70.0" cy="23.1" r="4" fill="#0f172a"/><circle cx="103.7" cy="23.1" r="4" fill="#0f172a"/><circle cx="137.3" cy="23.1" r="4" fill="#0f172a"/><circle cx="171.0" cy="23.2" r="4" fill="#0f172a"/><circle cx="204.7" cy="23.2" r="4" fill="#0f172a"/><circle cx="238.3" cy="23.1" r="4" fill="#0f172a"/><circle cx="272.0" cy="23.1" r="4" fill="#0f172a"/><circle cx="305.7" cy="23.1" r="4" fill="#0f172a"/><circle cx="339.3" cy="23.1" r="4" fill="#0f172a"/><circle cx="373.0" cy="23.1" r="4" fill="#0f172a"/><circle cx="406.7" cy="210.6" r="4" fill="#0f172a"/><circle cx="440.3" cy="23.3" r="4" fill="#0f172a"/><circle cx="474.0" cy="23.3" r="4" fill="#0f172a"/><circle cx="507.7" cy="23.0" r="4" fill="#0f172a"/><circle cx="541.3" cy="23.0" r="4" fill="#0f172a"/><circle cx="575.0" cy="23.1" r="4" fill="#0f172a"/><circle cx="608.7" cy="23.0" r="4" fill="#0f172a"/><circle cx="642.3" cy="23.1" r="4" fill="#0f172a"/><circle cx="676.0" cy="23.1" r="4" fill="#0f172a"/><circle cx="709.7" cy="23.1" r="4" fill="#0f172a"/><circle cx="743.3" cy="23.1" r="4" fill="#0f172a"/><circle cx="777.0" cy="106.6" r="4" fill="#0f172a"/><circle cx="810.7" cy="23.4" r="4" fill="#0f172a"/><circle cx="844.3" cy="23.4" r="4" fill="#0f172a"/><circle cx="878.0" cy="23.4" r="4" fill="#0f172a"/><circle cx="911.7" cy="23.4" r="4" fill="#0f172a"/><circle cx="945.3" cy="235.5" r="4" fill="#0f172a"/><circle cx="979.0" cy="173.5" r="4" fill="#0f172a"/><circle cx="1012.7" cy="340.0" r="4" fill="#0f172a"/><circle cx="1046.3" cy="332.1" r="4" fill="#0f172a"/><circle cx="1080.0" cy="216.6" r="4" fill="#0f172a"/><text x="70.0" y="370" text-anchor="middle" font-size="16" fill="#6b7280">Aug 28</text><text x="575.0" y="370" text-anchor="middle" font-size="16" fill="#6b7280">Sep 26</text><text x="1080.0" y="370" text-anchor="middle" font-size="16" fill="#6b7280">Oct 26</text></svg><p class='note'>Mostly near $99,000 from Aug 28 to Oct 16, with two brief dips. Replayed at a block on Oct 22, a 10,000 MUSD sale would have paid $11.</p><div class='num'>3 / 10</div></section><section><h1>Why it matters</h1><ul>
+       <li>The borrowing book holds 14,489 MUSD of debt against 16.59 BTC (Mezo's H1 report: $13.1M of loans in June).</li>
+       <li>96.7% of MUSD supply sits in protocol contracts: Stability Pool, sMUSD, the pool's sell side, the bridge.</li>
+       <li>Mezo already pays MEZO emissions for MUSD liquidity. Plumb points that liquidity at the side that is missing.</li>
+     </ul><div class='num'>4 / 10</div></section><section><h1>The vault</h1><h2>PlumbBidVault</h2><ol>
+       <li>Deposit mUSDC, get shares.</li>
+       <li>The vault bids from one tick under the market to 2% deeper, staked in the pool's gauge.</li>
+       <li>MUSD it buys earns in sMUSD while MUSD is under $1.</li>
+       <li>Near $1 it is offered back, never below $1.</li>
+       <li>MEZO streams to depositors. 10% is posted back to the same gauge to pull veBTC votes.</li>
+       <li>Exits are pro rata and in kind, any time.</li>
+     </ol><div class='num'>5 / 10</div></section><section><h1>Proof</h1><h2>Mezo mainnet's real contracts on a fork, and live on testnet</h2><div class='stats'>
+       <div><b>$38,556 → $63,556</b><span>a 100k MUSD sale, before and after a $25k deposit (fork)</span></div>
+       <div><b>$0 → $392</b><span>a 400 MUSD sale, block before and after our testnet deposit</span></div>
+       <div><b>0 MEZO</b><span>to a flash-loan deposit-claim-redeem attack</span></div>
+     </div><div class='num'>6 / 10</div></section><section><h1>sMUSD strategy</h1><h2>PlumbAskStrategy</h2><ul>
+       <li>7.38M MUSD sits in sMUSD's IdleStrategy, earning nothing.</li>
+       <li>One <code>setStrategy</code> call: 95% stays idle, 5% becomes a standing offer at $1.001 and up.</li>
+       <li>On the fork, the real owner switches all 7,382,555 MUSD over. A full cycle returns 164 MUSD to savers, and switching back returns every token.</li>
+       <li>90% of savers can leave at once with the order filled. Sandwiched buybacks are refused.</li>
+     </ul><div class='num'>7 / 10</div></section><section><h1>Safety</h1><ul>
+       <li>No owner, no admin, no upgrades, no signatures or meta-transactions.</li>
+       <li>Spot must agree with the TWAP before any liquidity moves or any deposit is priced.</li>
+       <li>Floor at $0.96 and a 60% inventory cap stop the vault buying all the way down.</li>
+       <li>48 tests and 10 invariants against real mainnet state. The invariants found a real share-pricing bug; blind review found two more. All fixed, each with a test.</li>
+     </ul><div class='num'>8 / 10</div></section><section><h1>Built on Mezo</h1><table>
+       <tr><td>MUSD/mUSDC CL pool, NFT manager</td><td>bids and asks</td></tr>
+       <tr><td>CLGauge, PoolsVoter, gauge voting reward</td><td>MEZO to depositors, incentives back to the peg pool</td></tr>
+       <tr><td>sMUSD and its strategy hook</td><td>parked inventory; the ask strategy</td></tr>
+       <tr><td>CL router</td><td>strategy buybacks</td></tr>
+       <tr><td>ActivePool, Stability Pool, NTT manager</td><td>the public peg observatory</td></tr>
+     </table><div class='num'>9 / 10</div></section><section><h1>Next</h1><ol>
+       <li>Mainnet vault with a deposit cap, seeded by whoever wants MUSD at $1: the foundation, market makers, borrowers.</li>
+       <li>The same vault on Aero's MUSD/USDC pool on Base, where Mezo's gauges already pay.</li>
+       <li>A governance proposal, with the fork test as evidence, to put sMUSD's idle MUSD to work under published caps.</li>
+     </ol><div class='num'>10 / 10</div></section></body></html>

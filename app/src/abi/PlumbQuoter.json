@@ -1,0 +1,114 @@
+[
+  {
+    "type": "function",
+    "name": "quoteCurve",
+    "inputs": [
+      {
+        "name": "pool",
+        "type": "address",
+        "internalType": "contract ICLPool"
+      },
+      {
+        "name": "zeroForOne",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "sizes",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "outs",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "quoteExactIn",
+    "inputs": [
+      {
+        "name": "pool",
+        "type": "address",
+        "internalType": "contract ICLPool"
+      },
+      {
+        "name": "zeroForOne",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "amountIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "amountOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "tickAfter",
+        "type": "int24",
+        "internalType": "int24"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "uniswapV3SwapCallback",
+    "inputs": [
+      {
+        "name": "amount0",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "amount1",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "NotPool",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "Quote",
+    "inputs": [
+      {
+        "name": "amount0",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "amount1",
+        "type": "int256",
+        "internalType": "int256"
+      },
+      {
+        "name": "tickAfter",
+        "type": "int24",
+        "internalType": "int24"
+      }
+    ]
+  }
+]

@@ -1,0 +1,9 @@
+.env
+.env.*
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31611/dry-run/
+node_modules/
+.next/
+.DS_Store
+!.env.example
