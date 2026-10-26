@@ -12,6 +12,9 @@
  *   PRIVATE_KEY      key that pays gas (keep only gas money on it)
  *   POLL_SECONDS     default 60
  *   DRIFT_TICKS      re-centre when the bid edge is this far from where it should be (default 20)
+ *   FILL_BPS         re-centre a bid the market has moved into only once this share of it has
+ *                    filled (default 2500). A bid in range is earning gauge rewards, so moving it
+ *                    the moment the first seller arrives would throw that away.
  */
 import {
   createPublicClient,
@@ -47,6 +50,7 @@ const VAULT = env("VAULT") as Address;
 const STRATEGY = process.env.STRATEGY as Address | undefined;
 const POLL = Number(env("POLL_SECONDS", "60")) * 1000;
 const DRIFT = Number(env("DRIFT_TICKS", "20"));
+const FILL_BPS = BigInt(env("FILL_BPS", "2500"));
 const once = process.argv.includes("--once");
 
 const poolAbi = [
@@ -154,7 +158,16 @@ async function vaultNeedsRebalance(s: VaultState): Promise<string | null> {
     const edgeTick = s.dir > 0 ? pos[5] : pos[6]; // the bid edge nearest the market
     const edgeDepeg = (edgeTick - s.parTick) * s.dir;
     const spotDepeg = (tick - s.parTick) * s.dir;
-    if (spotDepeg >= edgeDepeg) return "market moved into the bid";
+    if (spotDepeg >= edgeDepeg) {
+      // MUSD is 18 decimals and the USD side 6, and MUSD in the bid was bought just under $1.
+      const [, , , bidUsd, bidMusd] = s.holdings;
+      const filled = bidMusd / 10n ** 12n;
+      const total = bidUsd + filled;
+      if (total > 0n && (filled * 10_000n) / total >= FILL_BPS) {
+        return `bid ${(filled * 100n) / total}% filled`;
+      }
+      return null; // in range and earning; let it work
+    }
     if (edgeDepeg - spotDepeg > DRIFT) return `bid drifted ${edgeDepeg - spotDepeg} ticks from the market`;
   }
   return null;

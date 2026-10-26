@@ -54,6 +54,7 @@ Run `MEZO_RPC_URL=https://mezo-mainnet.boar.network forge test -vv` in `contract
 | Claim | Test |
 |---|---|
 | A $25k deposit lifts a 100k MUSD sale from $38,556 to $63,556 | `test_depositMakesSellingMusdCheaper` |
+| Replaying Oct 22 (block 12,685,218): a 10k MUSD sale paid $11.39; with a $25k Plumb bid it pays $9,851 | `test_oct22SaleWithAndWithoutPlumb` |
 | About 40,600 MEZO to depositors for a day in range (see ECONOMICS.md for why that is the best case) | `test_mezoStreamsToHolders` |
 | A flash-loan deposit, claim and redeem gets 0 MEZO | `test_flashDepositCannotSnipeMezo` |
 | A deposit-redeem round trip while the price moves loses $0.36 on $100,000 | `test_depositRedeemRoundTripNeverProfits` |

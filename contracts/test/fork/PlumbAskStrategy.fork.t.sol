@@ -320,6 +320,95 @@ contract PlumbAskStrategyForkTest is MezoFork {
         assertGe(next.principal(), principal, "savers lost MUSD on the round trip");
     }
 
+    // ------------------------------------------------------------------
+    // Third blind review: sMUSD safety and governance exit
+    // ------------------------------------------------------------------
+
+    /// sMUSD calls claimYield on every deposit and withdrawal. A pool or NFT-manager outage
+    /// must never block savers.
+    function test_saversUnaffectedByPoolOutage() public {
+        _settle(15 minutes);
+        strategy.rebalance();
+        vm.mockCallRevert(Mezo.POOL, abi.encodeWithSignature("observe(uint32[])"), "down");
+        vm.mockCallRevert(Mezo.POOL, abi.encodeWithSignature("slot0()"), "down");
+        vm.mockCallRevert(Mezo.NFPM, abi.encodeWithSignature("positions(uint256)"), "down");
+
+        deal(Mezo.MUSD, saver, 500e18);
+        vm.startPrank(saver);
+        musd.approve(Mezo.SMUSD, 500e18);
+        smusd.deposit(500e18);
+        smusd.withdraw(500e18);
+        vm.stopPrank();
+        assertEq(musd.balanceOf(saver), 500e18);
+    }
+
+    function test_roundingReserveIsNeverPaidAsYield() public {
+        uint256 before = musd.balanceOf(address(strategy));
+        vm.prank(Mezo.SMUSD);
+        uint256 paid = strategy.claimYield();
+        assertEq(paid, 0, "reserve paid out as yield");
+        assertEq(musd.balanceOf(address(strategy)), before);
+        assertGe(musd.balanceOf(address(strategy)), strategy.principal() + strategy.ROUNDING_RESERVE());
+    }
+
+    function test_buybackRefusedWhileSpotDisagreesWithTwap() public {
+        _settle(15 minutes);
+        strategy.rebalance();
+        _buyMusdUntilDepeg(-12);
+        _settle(1 hours);
+        strategy.rebalance(); // holds USD from the fill
+        uint256 usdBefore = usdc.balanceOf(address(strategy));
+        assertGt(usdBefore, 0);
+
+        // Someone dumps hard in this block: spot leaves the TWAP far behind.
+        _swap(Mezo.MUSD, Mezo.MUSDC, 3_000_000e18);
+        // More than idle MUSD plus the live order can cover, so only a buyback could pay it.
+        uint256 need = musd.balanceOf(address(strategy)) + strategy.orderSize() + 1e18;
+        vm.prank(Mezo.SMUSD);
+        vm.expectPartialRevert(PlumbAskStrategy.Shortfall.selector);
+        strategy.deallocate(need);
+        assertEq(usdc.balanceOf(address(strategy)), usdBefore);
+    }
+
+    function test_governanceCanHandOffUsdInAnEmergency() public {
+        _settle(15 minutes);
+        strategy.rebalance();
+        _buyMusdUntilDepeg(-60);
+        _settle(1 hours);
+        strategy.rebalance();
+        uint256 usdHeld = usdc.balanceOf(address(strategy));
+        assertGt(usdHeld, 0);
+
+        address owner = smusd.owner();
+        vm.expectRevert(PlumbAskStrategy.OnlyVaultOwner.selector);
+        strategy.setUsdHandoff(true);
+        vm.prank(owner);
+        strategy.setUsdHandoff(true);
+
+        PlumbAskStrategy next = new PlumbAskStrategy(
+            PlumbAskStrategy.Params({
+                vault: Mezo.SMUSD,
+                pool: pool,
+                nfpm: nfpm,
+                router: router,
+                usd: Mezo.MUSDC,
+                musd: Mezo.MUSD,
+                twapWindow: 1800,
+                maxTwapDeviation: 30,
+                maxOrderBps: 0,
+                premium: 10,
+                width: 40,
+                buybackDepeg: 20,
+                minRebalanceInterval: 10 minutes
+            })
+        );
+        uint256 ownerUsd = usdc.balanceOf(owner);
+        vm.prank(owner);
+        smusd.setStrategy(address(next));
+        assertEq(usdc.balanceOf(owner) - ownerUsd, usdHeld, "USD handed to the owner");
+        assertEq(usdc.balanceOf(address(strategy)), 0);
+    }
+
     function test_onlyVaultMovesFunds() public {
         vm.expectRevert(PlumbAskStrategy.OnlyVault.selector);
         strategy.deallocate(1);

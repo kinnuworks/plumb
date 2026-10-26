@@ -35,7 +35,7 @@ slides = [
      """<div class='stats'>
        <div><b>$38,556 → $63,556</b><span>a 100k MUSD sale, before and after a $25k deposit (fork)</span></div>
        <div><b>$0 → $389</b><span>a 400 MUSD sale, block before and after our testnet deposit</span></div>
-       <div><b>0 MEZO</b><span>to a flash-loan deposit-claim-redeem attack</span></div>
+       <div><b>$11 → $9,851</b><span>a 10k MUSD sale at Oct 22's thinnest block, without and with a $25k Plumb bid</span></div>
      </div>"""),
     ("sMUSD strategy", "PlumbAskStrategy",
      """<ul>
@@ -49,7 +49,7 @@ slides = [
        <li>No owner, no admin, no upgrades, no signatures or meta-transactions.</li>
        <li>Spot must agree with the TWAP before any liquidity moves or any deposit is priced.</li>
        <li>Floor at $0.96 and a 60% inventory cap stop the vault buying all the way down.</li>
-       <li>45 fork tests against Mezo mainnet state, 9 unit tests and 10 invariants. The invariants found a share-pricing bug and two blind reviews found more; each fix has its own test.</li>
+       <li>50 fork tests against Mezo mainnet state, 9 unit tests and 10 invariants. The invariants found a share-pricing bug and three blind reviews found more; each fix has its own test.</li>
      </ul>"""),
     ("Built on Mezo", "",
      """<table>

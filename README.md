@@ -6,25 +6,25 @@ Plumb turns stablecoins into standing bids for MUSD just under its price on Mezo
 
 Live on Mezo testnet (see [Deployments](#deployments)) and tested against Mezo mainnet's real contracts on a fork.
 
-Why it matters to Mezo: it plugs into Mezo's own CL pool, gauge and sMUSD strategy hook, with no owner and no admin. 45 tests run against Mezo mainnet state on a fork, plus 9 unit tests and 10 invariants; the invariants found a share-pricing bug, now fixed with its own test. sMUSD can adopt the strategy with one `setStrategy` call, which the fork test makes as sMUSD's real owner.
+Why it matters to Mezo: it plugs into Mezo's own CL pool, gauge and sMUSD strategy hook, with no owner and no admin. 50 tests run against Mezo mainnet state on a fork, plus 9 unit tests and 10 invariants; the invariants found a share-pricing bug, now fixed with its own test. sMUSD can adopt the strategy with one `setStrategy` call, which the fork test makes as sMUSD's real owner.
 
 ## For judges: two minutes
 
 | What | Where |
 |---|---|
 | Try it: peg observatory and vault | [kinnuworks.github.io/plumb](https://kinnuworks.github.io/plumb/) |
-| Pitch video (76 s) | [docs/plumb-pitch.mp4](docs/plumb-pitch.mp4) |
+| Pitch video (64 s) | [docs/plumb-pitch.mp4](docs/plumb-pitch.mp4) |
 | Live vault (Mezo testnet, capped at 2,000 mUSDC, source verified) | [explorer](https://explorer.test.mezo.org/address/0xA27AbD357f28c41732EA6670278140284fbAcF9E) |
 | Every transaction behind every claim | [docs/EVIDENCE.md](docs/EVIDENCE.md) |
 | Returns and risks, best case removed | [docs/ECONOMICS.md](docs/ECONOMICS.md) |
 | Deck | [docs/plumb-deck.pdf](docs/plumb-deck.pdf) |
 | Threat model and review findings | [contracts/SECURITY.md](contracts/SECURITY.md) |
 
-Check the headline claim yourself against Mezo mainnet state:
+Check the headline claims yourself against Mezo mainnet state (the second replays Oct 22, when a 10k MUSD sale paid $11; with a $25k Plumb bid it pays $9,851):
 
 ```bash
 cd contracts && export MEZO_RPC_URL=https://mezo-mainnet.boar.network
-forge test --match-test test_depositMakesSellingMusdCheaper -vv
+forge test --match-test 'test_depositMakesSellingMusdCheaper|test_oct22SaleWithAndWithoutPlumb' -vv
 # USD for 100k MUSD before: 38555698596
 # USD for 100k MUSD after:  63555698595
 ```
@@ -96,7 +96,8 @@ All fork tests run against Mezo mainnet state pinned at block 12,772,660. Nothin
 | Suite | Tests | Highlights |
 |---|---|---|
 | `PlumbBidVault.fork.t.sol` | 23 | A $25k deposit lifts what a 100k MUSD sale pays from $38,556 to $63,556. A flash-loaned deposit, claim and redeem collects 0 MEZO. A deposit-then-redeem round trip while the price moves loses $0.36 on $100,000. Manipulated prices, caps, floor and cooldown are enforced. Two equal depositors get equal value whoever leaves first, an sMUSD outage pays sMUSD in kind instead of blocking exits, and a broken gauge cannot freeze transfers. |
-| `PlumbAskStrategy.fork.t.sol` | 14 | sMUSD's real owner switches all 7,382,555 MUSD into the strategy. A full cycle sells 27,158 MUSD at $1.001 or more and returns 164 MUSD to savers. A sandwiched buyback is refused without spending a cent, 90% of savers can leave at once with the order filled. A long premium cannot drain idle MUSD, no yield is paid on unrealised fills, and migration waits rather than strand USD. |
+| `Oct22Replay.fork.t.sol` | 1 | Forks the thinnest block in the history (Oct 22). A 10k MUSD sale paid $11.39; with a $25k Plumb bid in the book it pays $9,851. |
+| `PlumbAskStrategy.fork.t.sol` | 18 | sMUSD's real owner switches all 7,382,555 MUSD into the strategy. A full cycle sells 27,158 MUSD at $1.001 or more and returns 164 MUSD to savers. A sandwiched buyback is refused without spending a cent, 90% of savers can leave at once with the order filled. A long premium cannot drain idle MUSD, no yield is paid on unrealised fills, and migration waits rather than strand USD. Savers are untouched by a pool outage, the rounding reserve is never paid as yield, buybacks refuse when spot and TWAP disagree, and governance has an opt-in emergency handoff. |
 | `MirroredLayout.fork.t.sol` | 4 | Builds the testnet layout (USD as token1) with Mezo's real CL factory and runs the vault's whole life on it. |
 | `PlumbQuoter.fork.t.sol` | 4 | Quotes match a real swap exactly and leave the pool untouched. |
 | `PegMath.t.sol` | 9 | Fuzzed tick math for both token orders. |

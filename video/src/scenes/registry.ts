@@ -5,6 +5,7 @@ import {Reveal} from './Reveal';
 import {Feature} from './Feature';
 import {Montage} from './Montage';
 import {Stat} from './Stat';
+import {Book} from './Book';
 import {Wall} from './Wall';
 import {EndCard} from './EndCard';
 import {Journey} from './Journey';
@@ -20,6 +21,7 @@ export const SCENES: Record<string, React.FC<any>> = {
   Feature,
   Montage,
   Stat,
+  Book,
   Wall,
   EndCard,
   // long format (60 s – 3 min, one continuous camera)

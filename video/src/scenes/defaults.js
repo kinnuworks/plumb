@@ -83,6 +83,20 @@ export const SCENE_DEFAULTS = {
     ],
   },
 
+  Book: {
+    bars: 5,
+    in: 'cut',
+    music: 'build',
+    props: {ask: 5_300_000, bid: 38_581, plumb: 25_000, askLabel: 'MUSD for sale', bidLabel: '$38k of buyers', plumbLabel: '+ Plumb'},
+    events: () => ({wall: -1, bids: 10, mag: 13, plumb: 16}),
+    cues: () => [
+      {at: 'wall', sfx: 'riser', beats: 2.5},
+      {at: 'bids', sfx: 'tick', gain: -4},
+      {at: 'mag', sfx: 'whoosh', leadBeats: 1},
+      {at: 'plumb', sfx: 'hit', gain: -1},
+    ],
+  },
+
   Stat: {
     bars: 1,
     in: 'zoom',

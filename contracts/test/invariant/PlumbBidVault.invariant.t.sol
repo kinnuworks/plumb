@@ -146,7 +146,9 @@ contract PlumbBidVaultInvariantTest is MezoFork {
     function invariant_sharesAreBacked() public view {
         if (vault.totalSupply() == 0) return;
         (uint256 a, uint256 b, uint256 c, uint256 d, uint256 e, uint256 f, uint256 g) = vault.holdings();
-        assertGt(a + b + c + d + e + f + g, 0);
+        // Shares are 1e18 per USD. A slice under 1e15 (a tenth of a cent) can round to zero
+        // tokens after nearly everything is redeemed; anything bigger must be backed.
+        if (a + b + c + d + e + f + g == 0) assertLt(vault.totalSupply(), 1e15);
     }
 
     /// Found by this suite: when a dump drains the pool, its price collapses and shares would

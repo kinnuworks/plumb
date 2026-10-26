@@ -23,6 +23,10 @@ Plumb has not been audited. This file records the threat model, what the tests p
 | sMUSD pauses and every vault exit reverts | A refused sMUSD withdrawal pays the redeemer their sMUSD tokens in kind; parking and yield claims fail soft | `test_exitSurvivesSmusdOutage` |
 | A broken gauge freezes share transfers or exits | Reward claims are wrapped so a failing gauge only delays MEZO | `test_transfersSurviveBrokenGauge` |
 | New depositors share sMUSD yield that predates them | Pending sMUSD yield is claimed into the vault before any share is priced | covered by `_realiseIncome` |
+| A sandwich inside the TWAP agreement band skims the strategy's buyback | Every buyback (rebalance, withdrawal, migration) checks spot against the TWAP and refuses unless it receives within 0.1% of the dearer of the two prices. Found in third blind review | `test_buybackRefusedWhileSpotDisagreesWithTwap` |
+| A pool or NFT-manager outage freezes the whole sMUSD vault, because sMUSD calls claimYield on every deposit and withdrawal | `claimYield` reads no pool or position state; buyback prices are read through try/catch. Found in third blind review | `test_saversUnaffectedByPoolOutage` |
+| The rounding reserve is paid out as yield, leaving principal unbacked | `ROUNDING_RESERVE` is excluded from surplus. Found in third blind review | `test_roundingReserveIsNeverPaidAsYield` |
+| Governance cannot leave the strategy while USD from a fill is held | sMUSD's owner can opt in with `setUsdHandoff(true)`; a switch away then hands outstanding USD to the owner instead of reverting. Found in third blind review | `test_governanceCanHandOffUsdInAnEmergency` |
 | Join right before rewards are split: deposit, claim and redeem in one transaction with borrowed funds | Deposits collect pending gauge rewards for existing holders before minting. Transfers do the same for the sender. Found in blind review | `test_flashDepositCannotSnipeMezo`, `test_transferKeepsEarnedMezoWithSender` |
 | Deposit while the TWAP lags a recovering price, then redeem in kind at the live price | Deposits are priced at the higher of the TWAP and live valuations. Found in blind review | `test_depositRedeemRoundTripNeverProfits` |
 | Sandwich the strategy's buyback, or make sMUSD withdrawals depend on it | At least 90% of principal is always idle. The order shrinks as savers leave. Buybacks refuse any price over 0.5% worse than the TWAP and never revert the caller | `test_sandwichedBuybackIsRefusedAndWithdrawalsStillPay`, `test_ninetyPercentLeaveAtOnceWithOrderFilled`, `test_orderShrinksWhenSaversLeave`, `invariant_withdrawalsDoNotFail` |
@@ -36,7 +40,7 @@ Plumb has not been audited. This file records the threat model, what the tests p
 
 ## Known limits
 
-- If MUSD stays above the order's lowest fill price ($1.001) while almost every saver leaves sMUSD, the last slice of principal (at most the exposure cap) is held as USD and can only be paid out once MUSD trades back at or below that price. The strategy will not buy back at a loss to pay it sooner. Governance can see this coming: exposure is public and capped.
+- If MUSD stays above the order's lowest fill price ($1.001) while almost every saver leaves sMUSD, the last slice of principal (at most the exposure cap) is held as USD and can only be paid out once MUSD trades back at or below that price. The strategy will not buy back at a loss to pay it sooner. Governance can see this coming (exposure is public and capped), and sMUSD's owner can opt in to `setUsdHandoff` to take the USD and switch strategies at once.
 - The vault's own `gauge.withdraw` call is not wrapped. If the gauge ever refused to return a staked position, exits would wait on it. Mezo's CLGauge has no pause on withdraw.
 
 - Concentrated positions return up to 1 wei less than they took when closed. The strategy is deployed with a small MUSD reserve outside principal (0.001 MUSD covers about 10^15 closes).

@@ -8,7 +8,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {ICLPool, INonfungiblePositionManager} from "./interfaces/IMezoCL.sol";
 import {ICLSwapRouter} from "./interfaces/ICLSwapRouter.sol";
-import {IVaultStrategy} from "./interfaces/IMUSDSavingsRate.sol";
+import {IVaultStrategy, IMUSDSavingsRate} from "./interfaces/IMUSDSavingsRate.sol";
 import {PegBook} from "./PegBook.sol";
 import {PegMath} from "./libraries/PegMath.sol";
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
@@ -28,8 +28,8 @@ import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 /// the order inside these fixed bounds.
 ///
 /// Rounding: closing a concentrated position returns up to 1 wei less than went in. The
-/// deployer seeds the strategy with a small MUSD reserve (outside principal) that covers
-/// these losses for longer than the strategy could ever run.
+/// deployer seeds the strategy with ROUNDING_RESERVE MUSD outside principal, which covers
+/// these losses for longer than the strategy could ever run and is never paid as yield.
 contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -52,8 +52,12 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
     uint256 private constant BPS = 10_000;
     /// Exposure (MUSD on offer plus USD held from fills) may never exceed 10% of principal.
     uint16 public constant MAX_ORDER_BPS = 1_000;
-    /// A buyback must return at least this share of what the TWAP says the USD is worth.
-    uint256 private constant BUYBACK_TOLERANCE_BPS = 50;
+    /// A buyback must return at least this share of what the USD is worth at the dearer of
+    /// the spot and TWAP prices.
+    uint256 private constant BUYBACK_TOLERANCE_BPS = 10;
+    /// MUSD kept outside principal to absorb the 1 wei a position can lose on close. It is
+    /// never paid out as yield.
+    uint256 public constant ROUNDING_RESERVE = 1e15;
 
     address public immutable vault;
     ICLSwapRouter public immutable router;
@@ -69,6 +73,9 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
     uint256 public orderId;
     /// @notice MUSD placed in the live order when it was opened.
     uint256 public orderSize;
+    /// @notice When true, sMUSD's owner has agreed that a switch away may hand any USD still
+    ///         held from fills to the owner instead of waiting for a buyback.
+    bool public usdHandoff;
     uint256 public lastRebalance;
 
     event Allocate(uint256 amount);
@@ -78,11 +85,14 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
     event OrderPlaced(uint256 tokenId, int24 depegLo, int24 depegHi, uint256 musdAmount);
     event BoughtBack(uint256 usdIn, uint256 musdOut);
     event BuyBackRefused(uint256 usdIn, uint256 minMusdOut);
+    event UsdHandoffSet(bool allowed);
+    event UsdHandedOff(address to, uint256 amount);
 
     error OnlyVault();
     error RebalanceTooSoon(uint256 nextAllowed);
     error Shortfall(uint256 needed, uint256 available);
     error UsdOutstanding(uint256 usd);
+    error OnlyVaultOwner();
     error BadParams();
 
     modifier onlyVault() {
@@ -148,11 +158,26 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
         _closeOrder();
         _tryBuyBack();
         uint256 strayUsd = usd.balanceOf(address(this));
-        if (strayUsd > 0) revert UsdOutstanding(strayUsd);
+        if (strayUsd > 0) {
+            // Only with the owner's explicit consent: hand the USD to them rather than block
+            // the switch. Savers' accounting then follows whatever the owner decides.
+            if (!usdHandoff) revert UsdOutstanding(strayUsd);
+            address owner_ = IMUSDSavingsRate(vault).owner();
+            usd.safeTransfer(owner_, strayUsd);
+            emit UsdHandedOff(owner_, strayUsd);
+        }
         amount = musd.balanceOf(address(this));
         principal = 0;
         if (amount > 0) musd.safeTransfer(newStrategy, amount);
         emit Migrated(newStrategy, amount);
+    }
+
+    /// @notice Lets sMUSD's owner allow (or disallow) a migration to hand outstanding USD to them.
+    ///         This is an emergency exit for governance, not something savers rely on.
+    function setUsdHandoff(bool allowed) external {
+        if (msg.sender != IMUSDSavingsRate(vault).owner()) revert OnlyVaultOwner();
+        usdHandoff = allowed;
+        emit UsdHandoffSet(allowed);
     }
 
     /// @dev setStrategy() transfers the previous strategy's balance before calling this.
@@ -235,17 +260,26 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
         _withdrawLiquidity(tokenId, _liquidityOf(tokenId), true);
     }
 
-    /// @dev Swaps all held USD back into MUSD. Two floors apply to what it must receive:
-    ///      - never fewer MUSD than the USD bought when the order filled at its lowest price,
-    ///        $1 + premium, so a buyback can never turn a fill into a loss;
-    ///      - never more than 0.5% worse than the TWAP, so a sandwich gains nothing.
-    ///      A refused or failed swap leaves the USD in place instead of reverting the caller.
+    /// @dev Swaps all held USD back into MUSD, on every path (rebalance, withdrawal,
+    ///      migration). It refuses, rather than reverts, unless all of these hold:
+    ///      - the pool's spot price agrees with its TWAP, so a same-block push is ruled out;
+    ///      - it receives within 0.1% of what the USD is worth at the dearer of spot and TWAP,
+    ///        so a sandwich inside the agreement band gains at most that;
+    ///      - it receives at least the MUSD the fill sold (priced at $1 + premium), so a
+    ///        buyback can never turn a fill into a loss.
     function _tryBuyBack() internal returns (bool ok) {
         uint256 usdIn = usd.balanceOf(address(this));
         if (usdIn == 0) return true;
-        (uint160 sqrtTwap,) = _twap();
+
+        (bool priced, uint160 sqrtTwap, uint160 sqrtSpot, int24 gap) = _safePrices();
+        if (!priced || gap > maxTwapDeviation) {
+            emit BuyBackRefused(usdIn, 0);
+            return false;
+        }
         uint256 atTwap = PegMath.usdToMusd(usdIn, sqrtTwap, usdIsToken0);
-        uint256 minOut = Math.max(Math.mulDiv(atTwap, BPS - BUYBACK_TOLERANCE_BPS, BPS), _usdAsMusd(usdIn));
+        uint256 atSpot = PegMath.usdToMusd(usdIn, sqrtSpot, usdIsToken0);
+        uint256 fair = Math.min(atTwap, atSpot);
+        uint256 minOut = Math.max(Math.mulDiv(fair, BPS - BUYBACK_TOLERANCE_BPS, BPS), _usdAsMusd(usdIn));
 
         usd.forceApprove(address(router), usdIn);
         try router.exactInputSingle(
@@ -268,6 +302,26 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
         usd.forceApprove(address(router), 0);
     }
 
+    /// @dev Spot and TWAP read through try/catch, so a pool problem refuses a buyback instead
+    ///      of reverting a saver's withdrawal.
+    function _safePrices() internal view returns (bool ok, uint160 sqrtTwap, uint160 sqrtSpot, int24 gap) {
+        uint32[] memory ago = new uint32[](2);
+        ago[0] = twapWindow;
+        try pool.observe(ago) returns (int56[] memory cumulatives, uint160[] memory) {
+            int56 delta = cumulatives[1] - cumulatives[0];
+            int56 window = int56(uint56(twapWindow));
+            // forge-lint: disable-next-line(unsafe-typecast)
+            int24 twapTick = int24(delta / window);
+            if (delta < 0 && delta % window != 0) twapTick--;
+            try pool.slot0() returns (uint160 spot, int24 spotTick, uint16, uint16, uint16, bool) {
+                sqrtTwap = TickMath.getSqrtRatioAtTick(twapTick);
+                sqrtSpot = spot;
+                gap = spotTick > twapTick ? spotTick - twapTick : twapTick - spotTick;
+                ok = true;
+            } catch {}
+        } catch {}
+    }
+
     /// @dev MUSD that `usdAmount` was worth when an order filled at its lowest price, $1 + premium.
     function _usdAsMusd(uint256 usdAmount) internal view returns (uint256) {
         int24 lowestFill = PegMath.toTick(-PegMath.ceilToSpacing(premium, tickSpacing), parTick, dir);
@@ -283,15 +337,18 @@ contract PlumbAskStrategy is PegBook, IVaultStrategy, ReentrancyGuard {
         return orderSize + _usdAsMusd(usd.balanceOf(address(this)));
     }
 
+    /// @dev Called by sMUSD on every deposit and withdrawal, so it reads no pool or position
+    ///      state: an outage elsewhere can never block savers. MUSD placed in the live order
+    ///      counts as backing at its placed size (fills turn it into at least as much USD), USD
+    ///      already collected from fills means profit is not yet realised, and the rounding
+    ///      reserve is never paid out.
     function _idleSurplus() internal view returns (uint256) {
+        if (usd.balanceOf(address(this)) > 0) return 0;
         uint256 idle = musd.balanceOf(address(this));
-        (uint160 sqrtTwap,) = _twap();
-        (uint256 orderUsd, uint256 orderMusd) = _positionAmounts(orderId, sqrtTwap);
-        // Profit on a fill is only real once its USD is back in MUSD.
-        if (usd.balanceOf(address(this)) + orderUsd > 0) return 0;
-        uint256 backing = idle + orderMusd;
-        if (backing <= principal) return 0;
-        uint256 surplus = backing - principal;
+        uint256 backing = idle + orderSize;
+        uint256 owed = principal + ROUNDING_RESERVE;
+        if (backing <= owed) return 0;
+        uint256 surplus = backing - owed;
         return surplus < idle ? surplus : idle;
     }
 }

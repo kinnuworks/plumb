@@ -11,7 +11,7 @@
    "C",
    "G"
   ],
-  "target": 76
+  "target": 64
  },
  "brand": {
   "bg": "#050606",
@@ -35,66 +35,25 @@
  "grain": 0.04,
  "scenes": [
   {
-   "id": "hook",
-   "type": "Hook",
-   "bars": 4,
-   "music": "sparse",
-   "props": {
-    "lines": [
-     "Selling 100k MUSD",
-     "on Mezo paid"
-    ],
-    "swap": [
-     "*$99,000.*"
-    ],
-    "size": 130
-   }
-  },
-  {
-   "id": "crash",
-   "type": "Stat",
-   "bars": 3,
-   "in": "flash",
-   "tone": "dark",
-   "music": "build",
-   "props": {
-    "value": 11,
-    "from": 9893,
-    "prefix": "$",
-    "suffix": "",
-    "label": "for 10,000 MUSD. Oct 22.",
-    "sub": "Replayed on chain at block 12,685,218",
-    "decimals": 0
-   }
-  },
-  {
    "id": "book",
-   "type": "Statement",
-   "bars": 3,
-   "in": "whip",
+   "type": "Book",
+   "bars": 5,
    "music": "build",
    "props": {
-    "text": "*5.3M* MUSD for sale. *$38k* of bids.",
-    "kicker": "Mezo's main pool, today"
-   }
-  },
-  {
-   "id": "reveal",
-   "type": "Reveal",
-   "bars": 2,
-   "in": "zoom",
-   "music": "full",
-   "props": {
-    "name": "Plumb",
-    "tagline": "The missing buy side for MUSD.",
-    "markSvg": "<svg width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"12\" stroke=\"#FF8A1F\" stroke-width=\"2.5\" stroke-linecap=\"round\"/><path d=\"M16 12 L24 20 L16 30 L8 20 Z\" fill=\"#FF8A1F\"/></svg>"
+    "ask": 5324381,
+    "bid": 38581,
+    "plumb": 25000,
+    "askLabel": "MUSD for sale",
+    "bidLabel": "$38k of buyers",
+    "plumbLabel": "+ Plumb",
+    "kicker": "Mezo's main MUSD pool, today"
    }
   },
   {
    "id": "parts",
    "type": "Montage",
-   "bars": 2,
-   "in": "cut",
+   "bars": 3,
+   "in": "zoom",
    "music": "full",
    "props": {
     "items": [
@@ -102,9 +61,9 @@
      "Its gauge.",
      "*sMUSD.*"
     ],
-    "step": 1,
-    "final": "Nothing new to trust.",
-    "sub": "A peg module built from Mezo's own parts"
+    "step": 1.5,
+    "final": "A peg module, built from Mezo's parts.",
+    "sub": "Plumb"
    }
   },
   {
