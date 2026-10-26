@@ -6,10 +6,14 @@ Plumb turns stablecoins into standing bids for MUSD just under its price on Mezo
 
 Live on Mezo testnet (see [Deployments](#deployments)) and tested against Mezo mainnet's real contracts on a fork.
 
+Why it matters to Mezo: it plugs into Mezo's own CL pool, gauge and sMUSD strategy hook, with no owner and no admin. 45 tests run against Mezo mainnet state on a fork, plus 9 unit tests and 10 invariants; the invariants found a share-pricing bug, now fixed with its own test. sMUSD can adopt the strategy with one `setStrategy` call, which the fork test makes as sMUSD's real owner.
+
 ## For judges: two minutes
 
 | What | Where |
 |---|---|
+| Try it: peg observatory and vault | [kinnuworks.github.io/plumb](https://kinnuworks.github.io/plumb/) |
+| Pitch video (76 s) | [docs/plumb-pitch.mp4](docs/plumb-pitch.mp4) |
 | Live vault (Mezo testnet, capped at 2,000 mUSDC, source verified) | [explorer](https://explorer.test.mezo.org/address/0xA27AbD357f28c41732EA6670278140284fbAcF9E) |
 | Every transaction behind every claim | [docs/EVIDENCE.md](docs/EVIDENCE.md) |
 | Returns and risks, best case removed | [docs/ECONOMICS.md](docs/ECONOMICS.md) |

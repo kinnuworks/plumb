@@ -4,7 +4,7 @@
 
 **Project name:** Plumb
 
-**Category:** Peg liquidity and yield
+**Category:** DeFi liquidity
 
 **TL;DR:** Plumb is a peg module for MUSD built from Mezo's own pool, gauge and sMUSD vault: stablecoins become standing bids just under MUSD's price, what they buy earns in sMUSD, and it is sold back only at $1 or more.
 
@@ -21,20 +21,20 @@ MUSD is the asset being supported, the inventory and the savings yield. MEZO is 
 
 **Tech stack:** Solidity 0.8.28 and Foundry (fork tests against Mezo mainnet, fuzz and invariant suites, Slither), Uniswap v3 math libraries, Next.js 15, viem and wagmi, a TypeScript keeper.
 
-**Track:** DeFi (the vault and sMUSD strategy) and access (the peg observatory).
+**Track:** Track 1, DeFi.
 
 **Chain deployed on:** Mezo testnet. PlumbBidVault `0xA27AbD357f28c41732EA6670278140284fbAcF9E`, MUSD/mUSDC CL pool `0xf6212414351f29AB816371f6b4ceE51960916c2a` (created with mainnet's fee tier and spacing). Mainnet integration proven against Mezo's real contracts on a fork pinned at block 12,772,660.
 
 **Project status:** Entirely new, built during Wave 1.
 
-**Project readiness:** Testnet deployment.
+**Project readiness:** Live on Mezo testnet: a verified, capped vault with real deposit, fill, keeper rebalance and withdrawal transactions (docs/EVIDENCE.md). App: https://kinnuworks.github.io/plumb/. Every mainnet claim reproduces with one `forge test` command against Mezo mainnet's real contracts. Next: a capped mainnet launch by Nov 15 (Wave 2).
 
 **Future milestones:**
 1. By Nov 15 (Wave 2): mainnet vault with a deposit cap, live depth meter on the observatory, and the vault on Aero's MUSD/USDC pool on Base.
 2. December 2026: external review, then raise the cap.
 3. Q1 2027: governance proposal to move sMUSD's idle MUSD into PlumbAskStrategy under published caps.
 
-**Team:** Solo builder. [name, role, X or LinkedIn]
+**Team:** Kinnu (solo builder: contracts, app, keeper). X: [@heykinnu](https://x.com/heykinnu). GitHub: [kinnuworks](https://github.com/kinnuworks).
 
 ## Deck (10 slides)
 
@@ -71,6 +71,6 @@ MUSD is the asset being supported, the inventory and the savings yield. MEZO is 
 
 ## Recording checklist
 
-- Observatory at http://localhost:3100 with live data
+- Observatory at https://kinnuworks.github.io/plumb/ with live data
 - Testnet vault: one deposit, one rebalance, one withdrawal, each with its explorer link
 - `forge test --match-test test_depositMakesSellingMusdCheaper -vv` and `--match-test test_fullCycleEarnsForSavers -vv` in a terminal

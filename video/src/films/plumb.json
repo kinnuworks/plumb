@@ -1,0 +1,194 @@
+{
+ "meta": {
+  "title": "Plumb, peg module for MUSD",
+  "fps": 30,
+  "bpm": 120,
+  "beatsPerBar": 4,
+  "tailBeats": 0,
+  "chords": [
+   "Am7",
+   "Fmaj7",
+   "C",
+   "G"
+  ],
+  "target": 76
+ },
+ "brand": {
+  "bg": "#050606",
+  "surface": "#0E0F10",
+  "ink": "#F2F4F3",
+  "muted": "#8A8F8C",
+  "line": "#1E2120",
+  "accent": "#FF8A1F",
+  "accentInk": "#140800",
+  "dark": "#050606",
+  "darkInk": "#F2F4F3",
+  "fontDisplay": "Inter",
+  "fontText": "Inter",
+  "fontMono": "Geist Mono",
+  "fontSerif": "Instrument Serif",
+  "emphasis": "accent",
+  "tracking": -0.05,
+  "weight": 720,
+  "look": "neon"
+ },
+ "grain": 0.04,
+ "scenes": [
+  {
+   "id": "hook",
+   "type": "Hook",
+   "bars": 4,
+   "music": "sparse",
+   "props": {
+    "lines": [
+     "Selling 100k MUSD",
+     "on Mezo paid"
+    ],
+    "swap": [
+     "*$99,000.*"
+    ],
+    "size": 130
+   }
+  },
+  {
+   "id": "crash",
+   "type": "Stat",
+   "bars": 3,
+   "in": "flash",
+   "tone": "dark",
+   "music": "build",
+   "props": {
+    "value": 11,
+    "from": 9893,
+    "prefix": "$",
+    "suffix": "",
+    "label": "for 10,000 MUSD. Oct 22.",
+    "sub": "Replayed on chain at block 12,685,218",
+    "decimals": 0
+   }
+  },
+  {
+   "id": "book",
+   "type": "Statement",
+   "bars": 3,
+   "in": "whip",
+   "music": "build",
+   "props": {
+    "text": "*5.3M* MUSD for sale. *$38k* of bids.",
+    "kicker": "Mezo's main pool, today"
+   }
+  },
+  {
+   "id": "reveal",
+   "type": "Reveal",
+   "bars": 2,
+   "in": "zoom",
+   "music": "full",
+   "props": {
+    "name": "Plumb",
+    "tagline": "The missing buy side for MUSD.",
+    "markSvg": "<svg width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><line x1=\"16\" y1=\"2\" x2=\"16\" y2=\"12\" stroke=\"#FF8A1F\" stroke-width=\"2.5\" stroke-linecap=\"round\"/><path d=\"M16 12 L24 20 L16 30 L8 20 Z\" fill=\"#FF8A1F\"/></svg>"
+   }
+  },
+  {
+   "id": "parts",
+   "type": "Montage",
+   "bars": 2,
+   "in": "cut",
+   "music": "full",
+   "props": {
+    "items": [
+     "Mezo's pool.",
+     "Its gauge.",
+     "*sMUSD.*"
+    ],
+    "step": 1,
+    "final": "Nothing new to trust.",
+    "sub": "A peg module built from Mezo's own parts"
+   }
+  },
+  {
+   "id": "bid",
+   "type": "Statement",
+   "bars": 2,
+   "in": "push",
+   "music": "full",
+   "props": {
+    "text": "Stablecoins become *bids* under the market.",
+    "kicker": "Deposit"
+   }
+  },
+  {
+   "id": "park",
+   "type": "Statement",
+   "bars": 2,
+   "in": "wipe",
+   "music": "full",
+   "props": {
+    "text": "Bought MUSD earns in *sMUSD*. Sold back at *$1+*.",
+    "kicker": "Hold, then sell at par"
+   }
+  },
+  {
+   "id": "fork",
+   "type": "Stat",
+   "bars": 5,
+   "in": "flash",
+   "tone": "dark",
+   "music": "full",
+   "props": {
+    "value": 63556,
+    "from": 38556,
+    "prefix": "$",
+    "label": "for a 100k MUSD sale, after a $25k deposit",
+    "sub": "Mezo mainnet fork, block 12,772,660",
+    "decimals": 0
+   }
+  },
+  {
+   "id": "testnet",
+   "type": "Stat",
+   "bars": 4,
+   "in": "whip",
+   "music": "full",
+   "props": {
+    "value": 389,
+    "from": 0,
+    "prefix": "$",
+    "label": "for a 400 MUSD sale, one block after our deposit",
+    "sub": "Mezo testnet, block 16,377,593",
+    "decimals": 0
+   }
+  },
+  {
+   "id": "safety",
+   "type": "Montage",
+   "bars": 6,
+   "in": "split",
+   "music": "break",
+   "props": {
+    "items": [
+     "No owner.",
+     "No admin keys.",
+     "In-kind exits.",
+     "*54 tests.*",
+     "*10 invariants.*"
+    ],
+    "step": 2,
+    "final": "Real mainnet state.",
+    "sub": "github.com/kinnuworks/plumb"
+   }
+  },
+  {
+   "id": "end",
+   "type": "Statement",
+   "bars": 5,
+   "in": "iris",
+   "music": "out",
+   "props": {
+    "text": "Plumb. The buyers MUSD is *missing*.",
+    "kicker": "github.com/kinnuworks/plumb"
+   }
+  }
+ ]
+}
