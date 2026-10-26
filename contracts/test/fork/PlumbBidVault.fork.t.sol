@@ -362,6 +362,89 @@ contract PlumbBidVaultForkTest is MezoFork {
         vm.stopPrank();
     }
 
+    // ------------------------------------------------------------------
+    // Second blind review: fees, sMUSD outage, broken gauge
+    // ------------------------------------------------------------------
+
+    /// Without a gauge, positions earn swap fees. Two equal depositors must get equal value,
+    /// whoever leaves first.
+    function test_feesAreSharedNotTakenByFirstRedeemer() public {
+        vault = _deployWith(ICLGauge(address(0)), address(smusd));
+        uint256 a = _depositFor(alice, 20_000e6);
+        _settle(15 minutes);
+        uint256 b = _depositFor(bob, 20_000e6);
+        assertApproxEqRel(a, b, 1e15);
+
+        // Trade back and forth through the bid so it earns fees.
+        for (uint256 i; i < 6; i++) {
+            _swap(Mezo.MUSD, Mezo.MUSDC, 45_000e18);
+            _swap(Mezo.MUSDC, Mezo.MUSD, 44_000e6);
+        }
+
+        vm.prank(alice);
+        (uint256 au, uint256 am) = vault.redeem(a, 0, 0, alice);
+        vm.prank(bob);
+        (uint256 bu, uint256 bm) = vault.redeem(b, 0, 0, bob);
+        uint256 aliceValue = au + am / 1e12;
+        uint256 bobValue = bu + bm / 1e12;
+        console2.log("alice out:", aliceValue);
+        console2.log("bob out:  ", bobValue);
+        assertApproxEqRel(aliceValue, bobValue, 1e15, "first redeemer took others' fees");
+    }
+
+    function test_exitSurvivesSmusdOutage() public {
+        _depositFor(alice, 25_000e6);
+        _swap(Mezo.MUSD, Mezo.MUSDC, 60_000e18);
+        _settle(1 hours);
+        vm.prank(keeper);
+        vault.rebalance();
+        (,, uint256 parked,,,,) = vault.holdings();
+        assertGt(parked, 0);
+
+        // sMUSD stops honouring withdrawals.
+        vm.mockCallRevert(Mezo.SMUSD, abi.encodeWithSelector(IMUSDSavingsRate.withdraw.selector), "paused");
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.redeem(shares, 0, 0, alice);
+        assertEq(IMUSDSavingsRate(Mezo.SMUSD).balanceOf(alice), parked, "sMUSD paid in kind");
+        assertEq(vault.totalSupply(), 0);
+    }
+
+    function test_transfersSurviveBrokenGauge() public {
+        _depositFor(alice, 10_000e6);
+        vm.mockCallRevert(Mezo.GAUGE, abi.encodeWithSignature("getReward(uint256)"), "broken");
+        uint256 shares = vault.balanceOf(alice);
+        vm.prank(alice);
+        vault.transfer(bob, shares);
+        assertEq(vault.balanceOf(bob), shares);
+    }
+
+    function _deployWith(ICLGauge g, address smusd_) internal returns (PlumbBidVault) {
+        PlumbBidVault.Params memory p = PlumbBidVault.Params({
+            pool: pool,
+            nfpm: nfpm,
+            gauge: g,
+            smusd: IMUSDSavingsRate(smusd_),
+            usd: Mezo.MUSDC,
+            musd: Mezo.MUSD,
+            treasury: treasury,
+            incentiveSink: address(0),
+            twapWindow: 1800,
+            maxTwapDeviation: 30,
+            bidWidth: 200,
+            askWidth: 50,
+            floorDepeg: 400,
+            nearParDepeg: 20,
+            maxInventoryBps: 6_000,
+            feeBps: 1_000,
+            incentiveBps: 0,
+            keeperBps: 100,
+            minRebalanceInterval: 10 minutes,
+            depositCap: 0
+        });
+        return new PlumbBidVault(p, "Plumb MUSD Bid", "plumbBID");
+    }
+
     function _deployCapped(uint256 cap) internal returns (PlumbBidVault) {
         PlumbBidVault.Params memory p = PlumbBidVault.Params({
             pool: pool,

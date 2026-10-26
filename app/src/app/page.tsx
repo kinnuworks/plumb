@@ -62,7 +62,7 @@ export default async function Observatory() {
       <section className="space-y-4">
         <h2 className="text-xl font-semibold">The buy side disappeared in October</h2>
         <p className="opacity-80 max-w-3xl">
-          From late August to mid October a 100,000 MUSD sale paid about $99,000. Since Oct 18 the bids have been pulled.
+          From late August to mid October a 100,000 MUSD sale paid about $99,000. Since Oct 18 the bid side has thinned.
           Replayed at a block on {worstDate}, selling 10,000 MUSD would have paid {fmtUsd(worst.usdFor10k)}.
         </p>
         <DepthHistoryChart />
@@ -73,8 +73,8 @@ export default async function Observatory() {
         <table className="w-full text-sm tabular-nums">
           <tbody>
             {[
-              ["Stability Pool (protocol bootstrap loan)", s.supply.stabilityPool],
-              ["sMUSD savings, in IdleStrategy earning nothing", s.supply.savingsIdle],
+              ["Stability Pool", s.supply.stabilityPool],
+              ["sMUSD savings (default IdleStrategy)", s.supply.savingsIdle],
               ["Offered for sale in the MUSD/mUSDC pool", s.supply.clPool],
               ["Bridged to Ethereum and Base", s.supply.bridged],
               ["Everyone else", s.supply.other],

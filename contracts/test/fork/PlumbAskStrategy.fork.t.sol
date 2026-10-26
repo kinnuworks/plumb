@@ -238,6 +238,88 @@ contract PlumbAskStrategyForkTest is MezoFork {
         new PlumbAskStrategy(bad);
     }
 
+    // ------------------------------------------------------------------
+    // Second blind review: accounting under a sustained premium
+    // ------------------------------------------------------------------
+
+    /// MUSD placed in the live order plus USD already collected from earlier fills (at par).
+    /// USD still inside the live order is part of orderSize, so it is not counted twice.
+    function _exposure() internal view returns (uint256) {
+        return strategy.orderSize() + usdc.balanceOf(address(strategy)) * 1e12;
+    }
+
+    /// MUSD stays above $1 for several rebalances. Each new order must account for USD still
+    /// held from earlier fills, so idle MUSD is never drained fill after fill.
+    function test_sustainedPremiumKeepsExposureCapped() public {
+        _settle(15 minutes);
+        strategy.rebalance();
+        uint256 cap = (strategy.principal() * 500) / 10_000;
+        for (uint256 i; i < 4; i++) {
+            _buyMusdUntilDepeg(-60); // push through whatever order is live
+            _settle(1 hours);
+            strategy.rebalance();
+            // Fills pay $1.001 to $1.005 per MUSD, so USD held can exceed the MUSD it replaced
+            // by up to the order's 0.4% band. That surplus is profit, not new exposure.
+            assertLe(_exposure(), (cap * 1_005) / 1_000, "exposure above cap");
+            assertEq(strategy.orderSize() == 0 || usdc.balanceOf(address(strategy)) * 1e12 < cap, true);
+            assertGe(musd.balanceOf(address(strategy)) + 1e18, strategy.principal() - cap, "idle drained");
+        }
+    }
+
+    function test_noYieldWhileFillsAreUnrealised() public {
+        _settle(15 minutes);
+        strategy.rebalance();
+        _buyMusdUntilDepeg(-12);
+        _settle(1 hours);
+        strategy.rebalance();
+        (,, uint256 usdHeld) = strategy.totalHoldings();
+        assertGt(usdHeld, 0);
+
+        vm.prank(Mezo.SMUSD);
+        assertEq(strategy.claimYield(), 0, "paid yield on an unrealised fill");
+    }
+
+    function test_migrateWaitsForFillsToBeBoughtBack() public {
+        _settle(15 minutes);
+        strategy.rebalance();
+        _buyMusdUntilDepeg(-60); // order fills; MUSD stays above its sell price
+        _settle(1 hours);
+        strategy.rebalance();
+        (,, uint256 usdHeld) = strategy.totalHoldings();
+        assertGt(usdHeld, 0);
+
+        PlumbAskStrategy next = new PlumbAskStrategy(
+            PlumbAskStrategy.Params({
+                vault: Mezo.SMUSD,
+                pool: pool,
+                nfpm: nfpm,
+                router: router,
+                usd: Mezo.MUSDC,
+                musd: Mezo.MUSD,
+                twapWindow: 1800,
+                maxTwapDeviation: 30,
+                maxOrderBps: 0,
+                premium: 10,
+                width: 40,
+                buybackDepeg: 20,
+                minRebalanceInterval: 10 minutes
+            })
+        );
+        address owner = smusd.owner();
+        vm.prank(owner);
+        vm.expectPartialRevert(PlumbAskStrategy.UsdOutstanding.selector);
+        smusd.setStrategy(address(next));
+
+        // Once MUSD trades back below the sell price, the switch goes through with no USD left.
+        _swap(Mezo.MUSD, Mezo.MUSDC, 3_000_000e18);
+        _settle(1 hours);
+        uint256 principal = strategy.principal();
+        vm.prank(owner);
+        smusd.setStrategy(address(next));
+        assertEq(usdc.balanceOf(address(strategy)), 0);
+        assertGe(next.principal(), principal, "savers lost MUSD on the round trip");
+    }
+
     function test_onlyVaultMovesFunds() public {
         vm.expectRevert(PlumbAskStrategy.OnlyVault.selector);
         strategy.deallocate(1);

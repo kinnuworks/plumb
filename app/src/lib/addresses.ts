@@ -19,7 +19,7 @@ export const MAINNET = {
 
 /** Plumb's testnet deployment (contracts/deployments/mezo-testnet.json). */
 export const PLUMB_TESTNET = {
-  vault: (process.env.NEXT_PUBLIC_TESTNET_VAULT ?? "0xf7db34df67373d06629dd154096d260A30e2637A") as Address,
+  vault: (process.env.NEXT_PUBLIC_TESTNET_VAULT ?? "0xA27AbD357f28c41732EA6670278140284fbAcF9E") as Address,
   pool: (process.env.NEXT_PUBLIC_TESTNET_POOL ?? "0xf6212414351f29AB816371f6b4ceE51960916c2a") as Address,
   musd: "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503" as Address,
   usd: "0xe1a26db653708A2AD8F824E92Db9852410e33A59" as Address,

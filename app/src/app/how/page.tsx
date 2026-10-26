@@ -5,7 +5,8 @@ const evidence = [
   ["One day with the bid in range", "About 40,600 MEZO streamed to depositors from the pool's gauge"],
   ["sMUSD switched to PlumbAskStrategy by its real owner, on a fork", "All 7,382,555 MUSD moved; deposits and withdrawals stay instant"],
   ["A full market cycle through that strategy", "27,158 MUSD sold at $1.001 or more, bought back cheaper, 164 MUSD paid to savers"],
-  ["Six invariants over 360 random calls per run", "Including one that caught a share-pricing bug when the pool runs dry"],
+  ["Ten invariants over random markets, deposits and withdrawals", "Including one that caught a share-pricing bug when the pool runs dry"],
+  ["Two equal depositors, with fees earned in between", "Get equal value back, whoever leaves first"],
 ];
 
 export default function How() {
@@ -18,7 +19,7 @@ export default function How() {
         <p>
           MUSD trades about 1% under $1. On Mezo&apos;s main MUSD/mUSDC pool, roughly 5.3 million MUSD is offered for
           sale between $0.99 and $1.00, and the buy side holds under $40,000. Until mid October a 100,000 MUSD sale
-          cleared at about $0.99. After the bids were pulled, the same sale runs the book dry.
+          cleared at about $0.99. Since then the bid side has thinned, and the same sale runs out of buyers.
         </p>
       </section>
 
@@ -51,8 +52,8 @@ export default function How() {
       <section className="space-y-3">
         <h2 className="text-xl font-semibold">The sMUSD strategy</h2>
         <p>
-          sMUSD keeps 7.38 million MUSD in a strategy that earns nothing. PlumbAskStrategy plugs into the same hook. It
-          keeps at least 95% idle so withdrawals stay instant, and offers the rest only at $1.001 and up. Savers never
+          sMUSD keeps 7.38 million MUSD in its default strategy as plain MUSD. PlumbAskStrategy plugs into the same hook. It
+          offers a capped slice only at $1.001 and up and keeps the rest idle, so withdrawals stay instant. Savers never
           sell below par. When the order fills and MUSD later dips, the strategy buys back more MUSD than it sold, and
           the surplus becomes sMUSD yield. Switching to it takes one call from the sMUSD owner, and switching back
           returns every token.

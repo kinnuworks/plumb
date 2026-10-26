@@ -6,15 +6,34 @@ Plumb turns stablecoins into standing bids for MUSD just under its price on Mezo
 
 Live on Mezo testnet (see [Deployments](#deployments)) and tested against Mezo mainnet's real contracts on a fork.
 
+## For judges: two minutes
+
+| What | Where |
+|---|---|
+| Live vault (Mezo testnet, capped at 2,000 mUSDC, source verified) | [explorer](https://explorer.test.mezo.org/address/0xA27AbD357f28c41732EA6670278140284fbAcF9E) |
+| Every transaction behind every claim | [docs/EVIDENCE.md](docs/EVIDENCE.md) |
+| Returns and risks, best case removed | [docs/ECONOMICS.md](docs/ECONOMICS.md) |
+| Deck | [docs/plumb-deck.pdf](docs/plumb-deck.pdf) |
+| Threat model and review findings | [contracts/SECURITY.md](contracts/SECURITY.md) |
+
+Check the headline claim yourself against Mezo mainnet state:
+
+```bash
+cd contracts && export MEZO_RPC_URL=https://mezo-mainnet.boar.network
+forge test --match-test test_depositMakesSellingMusdCheaper -vv
+# USD for 100k MUSD before: 38555698596
+# USD for 100k MUSD after:  63555698595
+```
+
 ## Why
 
 Numbers below were read from Mezo mainnet on 2026-10-26 and can be reproduced with the commands in [Reproduce the numbers](#reproduce-the-numbers).
 
 - MUSD trades at $0.990 on Mezo and about $0.989 on Aero, Uniswap and Curve.
 - The MUSD/mUSDC pool on Mezo offers about 5.3 million MUSD for sale between $0.99 and $1.00. The buy side holds $38,581.
-- From August 28 to October 16, selling 100,000 MUSD into that pool paid about $99,000. On October 18 the bids started to disappear. Replayed at a block on October 22, selling 10,000 MUSD would have paid $11.
-- MUSD's borrowing book holds 16.59 BTC against 14,489 MUSD of debt, in a single trove. Mezo's H1 report showed $13.1M of loans in June.
-- About 96.7% of the 29.5M MUSD supply sits in protocol contracts: the Stability Pool (14.2M), sMUSD's IdleStrategy (7.4M, earning nothing), the pool's sell side (5.3M) and the bridge (1.6M).
+- From August 28 to October 16, selling 100,000 MUSD into that pool usually paid about $99,000. From October 18 the bid side thinned. Replaying the pool every two days, a 10,000 MUSD sale would have paid $9,882 on Oct 18, $11 on Oct 22, $2,479 on Oct 24 and $9,893 on Oct 26 (`data/depth_history.csv`).
+- The MUSD borrowing contracts currently hold 14,489 MUSD of trove debt against 16.59 BTC (ActivePool), so very little MUSD is owed by borrowers who would need to buy it back.
+- About 96.7% of the 29.5M MUSD supply sits in protocol contracts: the Stability Pool (14.2M), sMUSD's default IdleStrategy (7.4M), the pool's sell side (5.3M) and the bridge (1.6M).
 
 Borrowers need a dollar that holds $1, and holders need somewhere to sell it. Mezo's Gauges post says thin pools put pressure on the peg. Plumb adds that buy side using Mezo's own pool, gauge and savings vault, so the MEZO emissions Mezo already pays for liquidity go to liquidity that defends the price.
 
@@ -33,7 +52,7 @@ What this returns, with the best case taken out, is in [docs/ECONOMICS.md](docs/
 
 ### PlumbAskStrategy (for sMUSD)
 
-sMUSD's owner can switch its strategy with one call. Today 7.38M MUSD sits in an `IdleStrategy` that earns nothing. `PlumbAskStrategy` keeps at least 95% of it idle, so withdrawals stay instant, and offers the rest only at $1.001 and up. If MUSD trades above $1, the order fills. When MUSD later dips, the strategy buys back more MUSD than it sold, and the surplus becomes sMUSD yield. Savers never sell below par.
+sMUSD's owner can switch its strategy with one call. Today its 7.38M MUSD sits in the default `IdleStrategy`, which holds it as plain MUSD. `PlumbAskStrategy` offers a capped slice (5% by default, 10% at most, counting both MUSD on offer and USD from earlier fills) only at $1.001 and up, and keeps the rest idle so withdrawals stay instant. If MUSD trades above $1, the order fills. When MUSD later dips, the strategy buys back more MUSD than it sold, and only then is the surplus paid to sMUSD holders. Every buyback, including on withdrawal or migration, is refused unless it returns at least as much MUSD as the fill sold, so savers never sell below par or buy back at a loss. Its job is to cap MUSD's overshoot above $1, not to earn much.
 
 ### Peg observatory
 
@@ -72,8 +91,8 @@ All fork tests run against Mezo mainnet state pinned at block 12,772,660. Nothin
 
 | Suite | Tests | Highlights |
 |---|---|---|
-| `PlumbBidVault.fork.t.sol` | 20 | A $25k deposit lifts what a 100k MUSD sale pays from $38,556 to $63,556. A flash-loaned deposit, claim and redeem collects 0 MEZO. A deposit-then-redeem round trip while the price moves loses $0.36 on $100,000. Manipulated prices, caps, floor and cooldown are enforced. |
-| `PlumbAskStrategy.fork.t.sol` | 11 | sMUSD's real owner switches all 7,382,555 MUSD into the strategy. A full cycle sells 27,158 MUSD at $1.001 or more and returns 164 MUSD to savers. A sandwiched buyback is refused without spending a cent, 90% of savers can leave at once with the order filled, and switching back returns everything. |
+| `PlumbBidVault.fork.t.sol` | 23 | A $25k deposit lifts what a 100k MUSD sale pays from $38,556 to $63,556. A flash-loaned deposit, claim and redeem collects 0 MEZO. A deposit-then-redeem round trip while the price moves loses $0.36 on $100,000. Manipulated prices, caps, floor and cooldown are enforced. Two equal depositors get equal value whoever leaves first, an sMUSD outage pays sMUSD in kind instead of blocking exits, and a broken gauge cannot freeze transfers. |
+| `PlumbAskStrategy.fork.t.sol` | 14 | sMUSD's real owner switches all 7,382,555 MUSD into the strategy. A full cycle sells 27,158 MUSD at $1.001 or more and returns 164 MUSD to savers. A sandwiched buyback is refused without spending a cent, 90% of savers can leave at once with the order filled. A long premium cannot drain idle MUSD, no yield is paid on unrealised fills, and migration waits rather than strand USD. |
 | `MirroredLayout.fork.t.sol` | 4 | Builds the testnet layout (USD as token1) with Mezo's real CL factory and runs the vault's whole life on it. |
 | `PlumbQuoter.fork.t.sol` | 4 | Quotes match a real swap exactly and leave the pool untouched. |
 | `PegMath.t.sol` | 9 | Fuzzed tick math for both token orders. |
@@ -92,8 +111,10 @@ Security notes, the threat model and the Slither triage are in [contracts/SECURI
 
 | Network | Contract | Address |
 |---|---|---|
-| Mezo testnet | PlumbBidVault | [`0xf7db34df67373d06629dd154096d260A30e2637A`](https://explorer.test.mezo.org/address/0xf7db34df67373d06629dd154096d260A30e2637A) |
+| Mezo testnet | PlumbBidVault | [`0xA27AbD357f28c41732EA6670278140284fbAcF9E`](https://explorer.test.mezo.org/address/0xA27AbD357f28c41732EA6670278140284fbAcF9E) |
 | Mezo testnet | MUSD/mUSDC CL pool (created by Plumb with mainnet's fee tier and spacing) | [`0xf6212414351f29AB816371f6b4ceE51960916c2a`](https://explorer.test.mezo.org/address/0xf6212414351f29AB816371f6b4ceE51960916c2a) |
+
+An earlier vault, deployed before the second review's fixes, is at [`0xf7db…637A`](https://explorer.test.mezo.org/address/0xf7db34df67373d06629dd154096d260A30e2637A); its transactions are kept in the evidence file.
 
 The MUSD used on testnet was borrowed the normal way, by opening a trove with 0.04 testnet BTC ([tx](https://explorer.test.mezo.org/tx/0x89a57035709db0123879dd9be1da19719f17f8e6774d1b51cebfd614adb2ab65)), and part of it was swapped to mUSDC in Mezo's stable pool ([tx](https://explorer.test.mezo.org/tx/0x435c9f671fd5bd31cef4e3b487a31e7e8af32416bd8f5d25263bc5bf15321505)). Demo transactions are listed in [docs/EVIDENCE.md](docs/EVIDENCE.md).
 

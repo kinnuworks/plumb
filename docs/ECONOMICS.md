@@ -49,7 +49,7 @@ Retail depositors are welcome, but the natural anchors are the parties who alrea
 
 | Anchor | Why it works for them |
 |---|---|
-| Supernormal Foundation or the PCV | The Stability Pool holds 14.2M MUSD of bootstrap loan. A small slice of protocol stablecoins in a capped Plumb vault defends the peg with a public, rule-bound contract instead of discretionary market making. |
+| Supernormal Foundation or the PCV | The Stability Pool holds 14.2M MUSD (the MUSD docs describe it as seeded by a protocol bootstrap loan). A small slice of protocol stablecoins in a capped Plumb vault defends the peg with a public, rule-bound contract instead of discretionary market making. |
 | Market makers | They get gauge rewards and a non-custodial, auditable venue. |
 | Borrowers | Their MUSD debt is redeemed against when MUSD is under par. A deeper bid supports the price their loans depend on. |
 

@@ -21,6 +21,7 @@ import {IMUSDSavingsRate} from "../src/interfaces/IMUSDSavingsRate.sol";
 ///   PRIVATE_KEY        deployer key (testnet only)
 ///   WALL_MUSD          MUSD to seed as the sell wall, in wei (default 1000e18)
 ///   TWAP_WINDOW        seconds (default 600 on testnet so the demo is usable sooner)
+///   DEPOSIT_CAP        most USD the vault accepts, raw units (default 2,000 mUSDC)
 contract DeployTestnet is Script {
     address constant MUSD = 0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503;
     address constant MUSDC = 0xe1a26db653708A2AD8F824E92Db9852410e33A59;
@@ -35,6 +36,7 @@ contract DeployTestnet is Script {
         address deployer = vm.addr(key);
         uint256 wall = vm.envOr("WALL_MUSD", uint256(1_000e18));
         uint32 twapWindow = uint32(vm.envOr("TWAP_WINDOW", uint256(600)));
+        uint256 depositCap = vm.envOr("DEPOSIT_CAP", uint256(2_000e6));
 
         // On testnet MUSD sorts before mUSDC, so USD is token1: the mirror of mainnet.
         bool usdIsToken0 = MUSDC < MUSD;
@@ -53,41 +55,32 @@ contract DeployTestnet is Script {
         }
 
         // Seed the sell wall: MUSD-only liquidity from just above the price up to $1.
-        if (wall > 0 && IERC20(MUSD).balanceOf(deployer) >= wall) {
-            (int24 tl, int24 tu) = PegMath.toTickRange(0, OPEN_DEPEG - SPACING, par, dir);
-            IERC20(MUSD).approve(address(NFPM), wall);
-            (address t0, address t1) = MUSD < MUSDC ? (MUSD, MUSDC) : (MUSDC, MUSD);
-            NFPM.mint(
-                INonfungiblePositionManager.MintParams({
-                    token0: t0,
-                    token1: t1,
-                    tickSpacing: SPACING,
-                    tickLower: tl,
-                    tickUpper: tu,
-                    amount0Desired: t0 == MUSD ? wall : 0,
-                    amount1Desired: t1 == MUSD ? wall : 0,
-                    amount0Min: 0,
-                    amount1Min: 0,
-                    recipient: deployer,
-                    // Generous deadline: forge stamps block.timestamp from its local simulation,
-                    // which is already in the past when the real transaction is mined.
-                    deadline: block.timestamp + 1 hours,
-                    sqrtPriceX96: 0
-                })
-            );
-        }
+        if (wall > 0 && IERC20(MUSD).balanceOf(deployer) >= wall) _seedWall(deployer, wall, par, dir);
 
-        PlumbBidVault vault = new PlumbBidVault(
+        PlumbBidVault vault = _deployVault(pool, deployer, twapWindow, depositCap);
+        vm.stopBroadcast();
+
+        console2.log("pool ", pool);
+        console2.log("vault", address(vault));
+        // The deployment file is written by scripts/record-testnet.sh only after checking that
+        // each address has code on chain, so a failed or simulated run can't leave fake addresses.
+    }
+
+    function _deployVault(address pool_, address treasury, uint32 twapWindow_, uint256 depositCap_)
+        internal
+        returns (PlumbBidVault)
+    {
+        return new PlumbBidVault(
             PlumbBidVault.Params({
-                pool: ICLPool(pool),
+                pool: ICLPool(pool_),
                 nfpm: NFPM,
                 gauge: ICLGauge(address(0)),
                 smusd: IMUSDSavingsRate(address(0)),
                 usd: MUSDC,
                 musd: MUSD,
-                treasury: deployer,
+                treasury: treasury,
                 incentiveSink: address(0),
-                twapWindow: twapWindow,
+                twapWindow: twapWindow_,
                 maxTwapDeviation: 30,
                 bidWidth: 200,
                 askWidth: 50,
@@ -98,16 +91,34 @@ contract DeployTestnet is Script {
                 incentiveBps: 0,
                 keeperBps: 100,
                 minRebalanceInterval: 5 minutes,
-                depositCap: 0
+                depositCap: depositCap_
             }),
             "Plumb MUSD Bid",
             "plumbBID"
         );
-        vm.stopBroadcast();
+    }
 
-        console2.log("pool ", pool);
-        console2.log("vault", address(vault));
-        // The deployment file is written by scripts/record-testnet.sh only after checking that
-        // each address has code on chain, so a failed or simulated run can't leave fake addresses.
+    function _seedWall(address deployer, uint256 wall, int24 par, int24 dir) internal {
+        (int24 tl, int24 tu) = PegMath.toTickRange(0, OPEN_DEPEG - SPACING, par, dir);
+        IERC20(MUSD).approve(address(NFPM), wall);
+        (address t0, address t1) = MUSD < MUSDC ? (MUSD, MUSDC) : (MUSDC, MUSD);
+        NFPM.mint(
+            INonfungiblePositionManager.MintParams({
+                token0: t0,
+                token1: t1,
+                tickSpacing: SPACING,
+                tickLower: tl,
+                tickUpper: tu,
+                amount0Desired: t0 == MUSD ? wall : 0,
+                amount1Desired: t1 == MUSD ? wall : 0,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: deployer,
+                // Generous deadline: forge stamps block.timestamp from its local simulation,
+                // which is already in the past when the real transaction is mined.
+                deadline: block.timestamp + 1 hours,
+                sqrtPriceX96: 0
+            })
+        );
     }
 }

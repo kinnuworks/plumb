@@ -98,6 +98,9 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
 
     event Deposit(address indexed caller, address indexed receiver, uint256 usdIn, uint256 shares);
     event Redeem(address indexed owner, address indexed receiver, uint256 shares, uint256 usdOut, uint256 musdOut);
+    /// sMUSD refused a withdrawal, so the redeemer received their sMUSD tokens in kind instead.
+    event SmusdPaidInKind(address indexed receiver, uint256 smusdAmount);
+    event FeesSwept(uint256 tokenId, uint256 usdAmount, uint256 musdAmount);
     event Rebalanced(
         address indexed keeper,
         int24 twapTick,
@@ -180,7 +183,8 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     {
         if (shares == 0) revert ZeroAmount();
         _harvest(address(0));
-        (usdOut, musdOut) = _withdrawShare(shares, totalSupply());
+        _realiseIncome();
+        (usdOut, musdOut) = _withdrawShare(shares, totalSupply(), receiver);
         _burn(msg.sender, shares);
         if (usdOut < minUsd || musdOut < minMusd) revert Slippage();
 
@@ -273,9 +277,10 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         int24 depeg = _depeg(twapTick);
         if (depeg >= floorDepeg) revert DepositsPaused(depeg);
 
-        // Credit MEZO already earned to the current holders before the new shares exist,
-        // otherwise a deposit-claim-redeem in one transaction could take their rewards.
+        // Credit MEZO, swap fees and sMUSD yield already earned to the current holders before
+        // the new shares exist, otherwise a newcomer would share in income that predates them.
         _harvest(address(0));
+        _realiseIncome();
 
         // Price new shares at whichever of the TWAP and the live price values the vault more.
         // Exits are paid in kind at the live mix of tokens, so a depositor can never buy in
@@ -300,14 +305,23 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
 
     /// @dev Frees shares/supply of every holding. Idle balances are read before positions are
     ///      unwound so each slice is counted once.
-    function _withdrawShare(uint256 shares, uint256 supply) internal returns (uint256 usdOut, uint256 musdOut) {
+    function _withdrawShare(uint256 shares, uint256 supply, address receiver)
+        internal
+        returns (uint256 usdOut, uint256 musdOut)
+    {
         usdOut = Math.mulDiv(usd.balanceOf(address(this)), shares, supply);
         musdOut = Math.mulDiv(musd.balanceOf(address(this)), shares, supply);
 
         uint256 parkedShare = Math.mulDiv(_parkedBalance(), shares, supply);
         if (parkedShare > 0) {
-            smusd.withdraw(parkedShare);
-            musdOut += parkedShare;
+            try smusd.withdraw(parkedShare) {
+                musdOut += parkedShare;
+            } catch {
+                // sMUSD is paused or out of liquidity: hand over the sMUSD itself so the exit
+                // never depends on another protocol being up.
+                IERC20(address(smusd)).safeTransfer(receiver, parkedShare);
+                emit SmusdPaidInKind(receiver, parkedShare);
+            }
         }
 
         (uint256 u, uint256 m) = _removeFraction(bid, shares, supply);
@@ -345,7 +359,7 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         _harvest(keeper);
         _close(bid);
         _close(ask);
-        if (_parkedBalance() > 0) smusd.claimYield();
+        _claimParkedYield();
 
         int24 depeg = _depeg(twapTick);
         int24 spotDepeg = _depeg(spotTick);
@@ -408,17 +422,54 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         }
     }
 
+    /// @dev Parks idle MUSD in sMUSD. If sMUSD refuses, the MUSD simply stays idle.
     function _park() internal returns (uint256 amount) {
         if (address(smusd) == address(0)) return 0;
         amount = musd.balanceOf(address(this));
         if (amount == 0) return 0;
         musd.forceApprove(address(smusd), amount);
-        smusd.deposit(amount);
+        try smusd.deposit(amount) {}
+        catch {
+            amount = 0;
+        }
+        musd.forceApprove(address(smusd), 0);
     }
 
+    /// @dev Takes MUSD back out of sMUSD. If sMUSD refuses, it stays parked until it can leave.
     function _unpark() internal {
         uint256 parked = _parkedBalance();
-        if (parked > 0) smusd.withdraw(parked);
+        if (parked > 0) try smusd.withdraw(parked) {} catch {}
+    }
+
+    function _claimParkedYield() internal {
+        if (_parkedBalance() > 0) try smusd.claimYield() {} catch {}
+    }
+
+    /// @dev Moves income that is owed to the vault but not yet in its balance into idle tokens:
+    ///      swap fees on unstaked positions and sMUSD yield. Called before any share is priced
+    ///      or redeemed, so income always belongs to the holders who earned it.
+    function _realiseIncome() internal {
+        _sweepFees(bid.tokenId, bid.staked);
+        _sweepFees(ask.tokenId, ask.staked);
+        _claimParkedYield();
+    }
+
+    /// @dev Collecting with no liquidity change pokes the position and pays out its fees only.
+    ///      Staked positions earn MEZO instead of fees, so there is nothing to sweep.
+    function _sweepFees(uint256 tokenId, bool staked) internal {
+        if (tokenId == 0 || staked) return;
+        (uint256 c0, uint256 c1) = nfpm.collect(
+            INonfungiblePositionManager.CollectParams({
+                tokenId: tokenId,
+                recipient: address(this),
+                amount0Max: type(uint128).max,
+                amount1Max: type(uint128).max
+            })
+        );
+        if (c0 + c1 > 0) {
+            (uint256 u, uint256 m) = usdIsToken0 ? (c0, c1) : (c1, c0);
+            emit FeesSwept(tokenId, u, m);
+        }
     }
 
     function _parkedBalance() internal view returns (uint256) {
@@ -455,8 +506,9 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     ///      pays out automatically when a position is unstaked.
     function _harvest(address keeper) internal {
         if (address(gauge) == address(0)) return;
-        if (bid.staked) gauge.getReward(bid.tokenId);
-        if (ask.staked) gauge.getReward(ask.tokenId);
+        // A gauge that fails to pay must not block exits or transfers; rewards stay claimable.
+        if (bid.staked) try gauge.getReward(bid.tokenId) {} catch {}
+        if (ask.staked) try gauge.getReward(ask.tokenId) {} catch {}
         uint256 gross = mezo.balanceOf(address(this)) - mezoLiabilities;
         if (gross == 0) return;
 

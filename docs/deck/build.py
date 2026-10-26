@@ -34,12 +34,12 @@ slides = [
     ("Proof", "Mezo mainnet's real contracts on a fork, and live on testnet",
      """<div class='stats'>
        <div><b>$38,556 → $63,556</b><span>a 100k MUSD sale, before and after a $25k deposit (fork)</span></div>
-       <div><b>$0 → $392</b><span>a 400 MUSD sale, block before and after our testnet deposit</span></div>
+       <div><b>$0 → $389</b><span>a 400 MUSD sale, block before and after our testnet deposit</span></div>
        <div><b>0 MEZO</b><span>to a flash-loan deposit-claim-redeem attack</span></div>
      </div>"""),
     ("sMUSD strategy", "PlumbAskStrategy",
      """<ul>
-       <li>7.38M MUSD sits in sMUSD's IdleStrategy, earning nothing.</li>
+       <li>sMUSD holds 7.38M MUSD in its default IdleStrategy.</li>
        <li>One <code>setStrategy</code> call: 95% stays idle, 5% becomes a standing offer at $1.001 and up.</li>
        <li>On the fork, the real owner switches all 7,382,555 MUSD over. A full cycle returns 164 MUSD to savers, and switching back returns every token.</li>
        <li>90% of savers can leave at once with the order filled. Sandwiched buybacks are refused.</li>
@@ -49,7 +49,7 @@ slides = [
        <li>No owner, no admin, no upgrades, no signatures or meta-transactions.</li>
        <li>Spot must agree with the TWAP before any liquidity moves or any deposit is priced.</li>
        <li>Floor at $0.96 and a 60% inventory cap stop the vault buying all the way down.</li>
-       <li>48 tests and 10 invariants against real mainnet state. The invariants found a real share-pricing bug; blind review found two more. All fixed, each with a test.</li>
+       <li>45 fork tests against Mezo mainnet state, 9 unit tests and 10 invariants. The invariants found a share-pricing bug and two blind reviews found more; each fix has its own test.</li>
      </ul>"""),
     ("Built on Mezo", "",
      """<table>
