@@ -3,8 +3,6 @@ import { fmtCompact, fmtNum, fmtUsd } from "@/lib/peg";
 import { DepthHistoryChart } from "@/components/DepthHistoryChart";
 import history from "@/data/depthHistory.json";
 
-export const revalidate = 60;
-
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-lg border border-current/15 p-4">
@@ -26,7 +24,7 @@ export default async function Observatory() {
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold">MUSD peg observatory</h1>
         <p className="opacity-80 max-w-3xl">
-          Live state of MUSD&apos;s market on Mezo, read from chain at block{" "}
+          State of MUSD&apos;s market on Mezo, read from chain when this page was built. Data as of block{" "}
           <a className="underline" href={`https://explorer.mezo.org/block/${s.block}`}>{s.block}</a>. Every number on this
           page can be recomputed with a single eth_call.
         </p>
