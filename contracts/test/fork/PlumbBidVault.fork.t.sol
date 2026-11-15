@@ -48,7 +48,9 @@ contract PlumbBidVaultForkTest is MezoFork {
                 incentiveBps: 1_000,
                 keeperBps: 100,
                 minRebalanceInterval: 10 minutes,
-                depositCap: 0
+                depositCap: 0,
+                bandWidth: 0,
+                bandBps: 0
             }),
             "Plumb MUSD Bid",
             "plumbBID"
@@ -440,7 +442,9 @@ contract PlumbBidVaultForkTest is MezoFork {
             incentiveBps: 0,
             keeperBps: 100,
             minRebalanceInterval: 10 minutes,
-            depositCap: 0
+            depositCap: 0,
+            bandWidth: 0,
+            bandBps: 0
         });
         return new PlumbBidVault(p, "Plumb MUSD Bid", "plumbBID");
     }
@@ -466,7 +470,9 @@ contract PlumbBidVaultForkTest is MezoFork {
             incentiveBps: 1_000,
             keeperBps: 100,
             minRebalanceInterval: 10 minutes,
-            depositCap: cap
+            depositCap: cap,
+            bandWidth: 0,
+            bandBps: 0
         });
         return new PlumbBidVault(p, "Plumb MUSD Bid", "plumbBID");
     }
