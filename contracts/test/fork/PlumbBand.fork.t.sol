@@ -2,6 +2,8 @@
 pragma solidity 0.8.28;
 
 import {console2} from "forge-std/console2.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import {ICLSwapRouter} from "../../src/interfaces/ICLSwapRouter.sol";
 
 import {PlumbBidVault} from "../../src/PlumbBidVault.sol";
 import {PegBook} from "../../src/PegBook.sol";
@@ -297,6 +299,69 @@ contract PlumbBandForkTest is MezoFork {
         int24 after_ = _depeg();
         assertGe(after_, twapDepeg - vault.maxTwapDeviation(), "swap pushed MUSD past the limit");
         assertGe(after_, 0, "bought MUSD above $1");
+    }
+
+    /// Found in review: the band's own MUSD came back as inventory on every rebalance and the
+    /// next band bought more, so with no trades at all inventory climbed past the cap within
+    /// a few rebalances and the vault stopped placing its band and bid.
+    function test_bandSurvivesRebalancesWithNoTrades() public {
+        _depositFor(vault, alice, 20_000e6);
+        for (uint256 i; i < 8; i++) {
+            _settle(31 minutes);
+            vm.prank(keeper);
+            vault.rebalance();
+            (uint256 bandId,) = vault.band();
+            (uint256 bidId,) = vault.bid();
+            assertGt(bandId, 0, "band still placed");
+            assertGt(bidId, 0, "bid still placed");
+        }
+        (, uint256 idleMusd, uint256 parked,,,,) = vault.holdings();
+        console2.log("parked + idle MUSD after 8 quiet rebalances:", (parked + idleMusd) / 1e18);
+        // Nothing was sold to the vault, so it holds no inventory beyond rounding.
+        assertLe(parked + idleMusd, 20e18, "inventory grew with no trades");
+        assertGe(vault.totalAssets(), 19_950e6, "quiet rebalances cost more than 0.25%");
+    }
+
+    /// A front-runner lifts MUSD inside the TWAP tolerance, calls rebalance, then sells back.
+    /// The band's swap never buys dearer than the TWAP, so there is nothing to sell into.
+    function test_bandSwapCannotBeSandwiched() public {
+        _depositFor(vault, alice, 200_000e6);
+        _settle(31 minutes);
+        uint256 before = vault.totalAssets();
+
+        address mev = makeAddr("mev");
+        int24 twap = vault.currentDepeg();
+        uint256 usdIn = 1_000_000e6;
+        deal(Mezo.MUSDC, mev, usdIn);
+        vm.startPrank(mev);
+        usdc.approve(address(router), type(uint256).max);
+        musd.approve(address(router), type(uint256).max);
+        vm.stopPrank();
+        _swapAs(mev, Mezo.MUSDC, Mezo.MUSD, usdIn, vault.parTick() + (twap - 20) * vault.dir());
+        vault.rebalance();
+        _swapAs(mev, Mezo.MUSD, Mezo.MUSDC, musd.balanceOf(mev), vault.parTick() + (twap + 40) * vault.dir());
+
+        uint256 mevUsd = usdc.balanceOf(mev) + musd.balanceOf(mev) / 1e12;
+        console2.log("front-runner end value vs start:", mevUsd, usdIn);
+        assertLe(mevUsd, usdIn, "sandwich paid");
+        _settle(31 minutes);
+        assertGe(vault.totalAssets() + 20e6, before, "vault lost more than rounding to the sandwich");
+    }
+
+    function _swapAs(address who, address tokenIn, address tokenOut, uint256 amount, int24 limitTick) internal {
+        vm.prank(who);
+        router.exactInputSingle(
+            ICLSwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                tickSpacing: 10,
+                recipient: who,
+                deadline: block.timestamp,
+                amountIn: amount,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: TickMath.getSqrtRatioAtTick(limitTick)
+            })
+        );
     }
 
     function test_badBandParamsRejected() public {
