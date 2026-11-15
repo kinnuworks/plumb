@@ -1,4 +1,5 @@
 import type { Address } from "viem";
+import mainnetVault from "./mainnet-vault.json";
 
 /** Mezo mainnet contracts Plumb reads or integrates with. */
 export const MAINNET = {
@@ -27,7 +28,7 @@ export const PLUMB_TESTNET = {
 
 /** Plumb's capped mainnet vault, once deployed (contracts/script/DeployMainnet.s.sol). */
 export const PLUMB_MAINNET = {
-  vault: (process.env.NEXT_PUBLIC_MAINNET_VAULT ?? "0x0000000000000000000000000000000000000000") as Address,
+  vault: (process.env.NEXT_PUBLIC_MAINNET_VAULT ?? mainnetVault.vault) as Address,
   usd: "0x04671C72Aab5AC02A03c1098314b1BB6B560c197" as Address,
 };
 
