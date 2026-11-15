@@ -63,3 +63,18 @@ Command: `slither src/ --filter-paths "lib/|test/" --exclude-dependencies`
 | assembly | `PlumbQuoter` decodes revert data | Intended, and covered by `test_quoteMatchesARealSale` |
 | timestamp | Cooldowns and deadlines | Intended. Minutes-scale cooldowns tolerate validator timestamp drift |
 | others | style (event fields, literal digits, uninitialised locals defaulting to zero, ignored return values from the NFT manager) | Reviewed, no change |
+
+## Wave 2 review: the market band (2026-11-15)
+
+A fresh reviewer, who hadn't seen the build, read the band change and ran its own fork tests. `slither` was run on the project too. Findings and what was done:
+
+| Severity | Finding | Status |
+|---|---|---|
+| High | When the band closed, its MUSD came back counted as inventory. The next band then bought more, so with no trades inventory passed the 60% cap after about 4 rebalances and the vault stopped placing its band and bid. | Fixed. The band's MUSD is now kept apart, reused for the next band and paired with the USD it needs, so only the shortfall is swapped. Test `test_bandSurvivesRebalancesWithNoTrades`: 8 quiet rebalances, band and bid still placed, 0 inventory. |
+| Medium | Band-swap sandwich. The swap limit was the TWAP less the 30-tick tolerance, so a front-runner could lift the spot and sell into the vault's swap (+$30.85 on a $200k vault in the reviewer's fork run). | Fixed. The swap now pays at most one tick slot (about 0.1%) over the TWAP. Test `test_bandSwapCannotBeSandwiched`: the same attack ends $124.6 down. A residual edge of up to 0.1% of the band's swap remains. |
+| Low | A per-holder rounding remainder could leave a holder owed a few wei more MEZO than the pooled liability, so the last `redeem` could underflow. | Fixed. The payout is capped at the liability and the vault's MEZO balance. |
+| Low | When a thin pool's price moves during the band swap, there can be a gap of up to one TWAP tolerance between the band and the bid. | Accepted. The bid deliberately stays below both the TWAP and the spot. |
+| Info | `bidWidth` and `askWidth` aren't checked to be multiples of the tick spacing. | Accepted. Deploy parameters (140/50 on spacing 10) are checked by the fork tests; there's no runtime path. |
+| Info | `holdings()` leaves out the band. | `bandHoldings()` reports it; the app and keeper read both. |
+
+`slither` flagged reentrancy on calls to the gauge and position manager. Those are trusted, and every entry point is `nonReentrant`. It also flagged an intended integer division in `_bandRange`. No other findings on the vault.
