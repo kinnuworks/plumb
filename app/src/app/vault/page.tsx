@@ -222,6 +222,12 @@ function VaultView({ net }: { net: Net }) {
               label="MEZO earned, ready to claim"
               value={myMezo === undefined ? "–" : `${fmtNum(Number(formatUnits(myMezo, 18)), 2)} MEZO`}
             />
+            {net === "testnet" && (
+              <p className="text-xs opacity-70">
+                Mezo testnet has no gauge for this pool, so testnet deposits earn no MEZO. Gauge rewards are paid on mainnet;
+                the fork tests measure them against mainnet&apos;s real gauge.
+              </p>
+            )}
 
             <div className="flex gap-2 pt-2">
               <input
