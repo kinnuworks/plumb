@@ -26,10 +26,16 @@ export default async function Observatory() {
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold">A standing bid under MUSD</h1>
         <p className="opacity-80 max-w-3xl">
-          Most of the buyers for MUSD on Mezo sit in one tick of the main MUSD/mUSDC pool: 6 of its 10 gauge-staked
-          positions, holding 93% of its liquidity. Below that tick the pool holds almost no USD. Plumb is a capped vault
-          that lets anyone fund that buy side with mUSDC, and pays them the pool&apos;s MEZO rewards for it.
+          Nearly every buyer of MUSD on Mezo is a handful of positions parked at one price, about $0.994, in the main
+          MUSD/mUSDC pool. Below that price almost nobody is bidding, so a large sale runs out of buyers. Plumb is a vault
+          that turns your mUSDC into more buyers at that price and below it, and pays you the pool&apos;s MEZO rewards for
+          it (the pool pays about 87,350 MEZO a day to liquidity at the current price).
         </p>
+        <ul className="text-sm opacity-80 max-w-3xl list-disc pl-5 space-y-1">
+          <li>Deposits are capped at 5,000 mUSDC. Withdraw any time; you get your share of each token back.</li>
+          <li>The risk: MUSD the vault buys below $1 is held until it can be sold at $1 or more, so you carry that MUSD if the price stays low.</li>
+          <li>No owner, no admin keys. Unaudited; a fresh review&apos;s findings are fixed and listed in the repo.</li>
+        </ul>
         <p className="text-sm">
           <Link className="underline" href="/vault">Open the vault</Link>
           {" · "}

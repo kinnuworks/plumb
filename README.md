@@ -1,43 +1,45 @@
 # Plumb
 
-A peg module for MUSD, built entirely from Mezo's own parts.
+A capped vault on Mezo that pays stablecoin holders the main MUSD pool's MEZO rewards to keep a standing bid under MUSD.
 
-Plumb turns stablecoins into standing bids for MUSD just under its price on Mezo's main MUSD/mUSDC pool, stakes them in that pool's gauge, parks the MUSD it buys in sMUSD, and sells it back only at $1 or more. A second contract plugs into sMUSD's strategy hook and turns a slice of its idle MUSD into a standing offer at par. Every rule is fixed in code and every number is checkable on chain, so the protocol, its treasury and market makers can all defend the peg through one public, capped, ownerless vault.
+Almost all of MUSD's buyers on Mezo sit in one tick of the main MUSD/mUSDC pool. Plumb puts deposits on that tick and below it, through Mezo's own pool, gauge and sMUSD, with no owner and no admin keys.
 
-Live on Mezo testnet (see [Deployments](#deployments)) and tested against Mezo mainnet's real contracts on a fork.
+**Try it in 30 seconds:** open [kinnuworks.github.io/plumb](https://kinnuworks.github.io/plumb/). The first screen reads Mezo mainnet in your browser and shows what selling 10k to 500k MUSD pays at the current block. No wallet needed. The [vault page](https://kinnuworks.github.io/plumb/vault/) shows the live testnet vault's band, bid and value.
 
-Why it matters to Mezo: it plugs into Mezo's own CL pool, gauge and sMUSD strategy hook, with no owner and no admin. 50 tests run against Mezo mainnet state on a fork, plus 9 unit tests and 10 invariants; the invariants found a share-pricing bug, now fixed with its own test. sMUSD can adopt the strategy with one `setStrategy` call, which the fork test makes as sMUSD's real owner.
+New in Wave 2: [what changed since Wave 1](docs/WAVE2.md).
 
 ## For judges: two minutes
 
 | What | Where |
 |---|---|
-| Try it: peg observatory and vault | [kinnuworks.github.io/plumb](https://kinnuworks.github.io/plumb/) |
-| Pitch video (64 s) | [docs/plumb-pitch.mp4](docs/plumb-pitch.mp4) |
-| Live vault (Mezo testnet, capped at 2,000 mUSDC, source verified) | [explorer](https://explorer.test.mezo.org/address/0xA27AbD357f28c41732EA6670278140284fbAcF9E) |
+| Live app (mainnet depth, testnet vault) | [kinnuworks.github.io/plumb](https://kinnuworks.github.io/plumb/) |
+| What changed since Wave 1 | [docs/WAVE2.md](docs/WAVE2.md) |
+| Live vault, Mezo testnet (capped at 5,000 mUSDC, source verified) | [explorer](https://explorer.test.mezo.org/address/0x9688ef37203022054b8337e8b5dA220Eed24e481) |
+| Live vault, Mezo mainnet | pending deployment |
+| Security review and fixes | [contracts/SECURITY.md](contracts/SECURITY.md) |
 | Every transaction behind every claim | [docs/EVIDENCE.md](docs/EVIDENCE.md) |
-| Returns and risks, best case removed | [docs/ECONOMICS.md](docs/ECONOMICS.md) |
-| Deck | [docs/plumb-deck.pdf](docs/plumb-deck.pdf) |
-| Threat model and review findings | [contracts/SECURITY.md](contracts/SECURITY.md) |
+| Returns and risks | [docs/ECONOMICS.md](docs/ECONOMICS.md) |
 
-Check the headline claims yourself against Mezo mainnet state (the second replays Oct 22, when a 10k MUSD sale paid $11; with a $25k Plumb bid it pays $9,851):
+Check the Wave 2 claims yourself against Mezo mainnet state:
 
 ```bash
-cd contracts && export MEZO_RPC_URL=https://mezo-mainnet.boar.network
-forge test --match-test 'test_depositMakesSellingMusdCheaper|test_oct22SaleWithAndWithoutPlumb' -vv
-# USD for 100k MUSD before: 38555698596
-# USD for 100k MUSD after:  63555698595
+cd contracts && export MEZO_RPC_URL=https://mezo.drpc.org
+forge test --match-test 'test_bandEarnsMezoWhileThePegHolds|test_backstopCatchesALargeSale' -vv
+# MEZO in a quiet day, band + bid: 3508831598460675540000
+# MEZO in a quiet day, bid only:   0
+# USD for 400k MUSD before: 111686626707
+# USD for 400k MUSD after:  161679450837
 ```
 
 ## Why
 
-Numbers below were read from Mezo mainnet on 2026-10-26 and can be reproduced with the commands in [Reproduce the numbers](#reproduce-the-numbers).
+Read from Mezo mainnet on 2026-11-15 (blocks 13,239,796 to 13,239,968):
 
-- MUSD trades at $0.990 on Mezo and about $0.989 on Aero, Uniswap and Curve.
-- The MUSD/mUSDC pool on Mezo offers about 5.3 million MUSD for sale between $0.99 and $1.00. The buy side holds $38,581.
-- From August 28 to October 16, selling 100,000 MUSD into that pool usually paid about $99,000. From October 18 the bid side thinned. Replaying the pool every two days, a 10,000 MUSD sale would have paid $9,882 on Oct 18, $11 on Oct 22, $2,479 on Oct 24 and $9,893 on Oct 26 (`data/depth_history.csv`).
-- The MUSD borrowing contracts currently hold 14,489 MUSD of trove debt against 16.59 BTC (ActivePool), so very little MUSD is owed by borrowers who would need to buy it back.
-- About 96.7% of the 29.5M MUSD supply sits in protocol contracts: the Stability Pool (14.2M), sMUSD's default IdleStrategy (7.4M), the pool's sell side (5.3M) and the bridge (1.6M).
+- MUSD trades at $0.994 in the main MUSD/mUSDC pool. A 100,000 MUSD sale pays $99,284.
+- The pool's whole buy side is $111,709 of mUSDC. Selling 250,000 or 500,000 MUSD pays the same $111,687, because nothing else is bidding.
+- 6 of the 10 positions staked in the pool's gauge sit in the one tick range at the price and hold 93% of the staked liquidity. When they step away, depth goes with them: replayed at a block on Oct 22, a 10,000 MUSD sale would have paid $11 (`data/depth_history.csv`).
+- The gauge pays about 87,350 MEZO a day, but only to staked liquidity in range at the current tick.
+- Only 4 troves are open, with 28,310 MUSD of debt, so redemptions can't absorb much selling either.
 
 Borrowers need a dollar that holds $1, and holders need somewhere to sell it. Mezo's Gauges post says thin pools put pressure on the peg. Plumb adds that buy side using Mezo's own pool, gauge and savings vault, so the MEZO emissions Mezo already pays for liquidity go to liquidity that defends the price.
 
@@ -48,11 +50,11 @@ What this returns, with the best case taken out, is in [docs/ECONOMICS.md](docs/
 ### PlumbBidVault
 
 1. You deposit mUSDC and get vault shares.
-2. The vault places the mUSDC as a concentrated bid that starts one tick below the market and runs about 2% deeper. Anyone selling MUSD meets it.
-3. The position is staked in the pool's gauge. MEZO emissions stream to share holders, after a 10% fee, a 10% incentive posted back to the same gauge's voting reward, and a 1% tip to whoever rebalances.
-4. MUSD the bid buys goes into sMUSD and earns savings yield while MUSD is under $1.
-5. When MUSD trades within 0.2% of $1, the vault takes that MUSD out and offers it at $1 or more. Depositors earn the discount on the round trip.
-6. Withdrawals pay your share of each token, in kind, at any time.
+2. Half of the free mUSDC goes into a band: one 10-tick slot around the live price, where the pool's other buyers sit. The vault swaps just enough mUSDC into MUSD to fill it, never paying more than the TWAP price plus one slot or more than $1.
+3. The rest becomes a bid from the band's lower edge down to about $0.98. Anyone selling MUSD past the band meets it.
+4. Both positions are staked in the pool's gauge. The band is in range while MUSD trades normally, so it earns MEZO every block; the bid earns when sellers push the price into it. MEZO streams to share holders after a 10% fee, a 10% incentive posted back to the same gauge's voting reward, and a 1% tip to whoever rebalances.
+5. MUSD the bid buys goes into sMUSD and earns savings yield while MUSD is under $1. When MUSD trades within 0.2% of $1, the vault offers it back at $1 or more.
+6. Withdrawals pay your share of each token, in kind, at any time. No bids or deposits below $0.97.
 
 ### PlumbAskStrategy (for sMUSD)
 

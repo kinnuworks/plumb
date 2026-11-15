@@ -43,7 +43,12 @@ export function LiveDepthPanel() {
             <tr key={x.size} className="border-t border-current/10" data-testid={`quote-${x.size}`}>
               <td className="py-1">{fmtNum(x.size)} MUSD</td>
               <td>{fmtUsd(x.usdOut)}</td>
-              <td>${x.avgPrice.toFixed(4)}</td>
+              <td>
+                ${x.avgPrice.toFixed(4)}
+                {x.size > 0 && x.usdOut < x.size * 0.5 && (
+                  <span className="opacity-70"> (buyers run out after {fmtUsd(x.usdOut)}; the rest sells for almost nothing)</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
