@@ -15,7 +15,8 @@ import {IMUSDSavingsRate} from "../src/interfaces/IMUSDSavingsRate.sol";
 /// Testnet has no MUSD/mUSDC concentrated pool, so this script creates one with the same
 /// fee tier and tick spacing as mainnet, opens it at the mainnet price ($0.99), and seeds
 /// it with a MUSD sell wall shaped like mainnet's (MUSD offered from $0.99 up to $1.00).
-/// Mezo's testnet gauge voter has not whitelisted mUSDC, so the vault runs without a gauge.
+/// Mezo's testnet gauge voter has not whitelisted mUSDC, so the vault runs without a gauge
+/// (the band still earns swap fees; gauge MEZO is exercised on mainnet and in the fork tests).
 ///
 /// Env:
 ///   PRIVATE_KEY        deployer key (testnet only)
@@ -92,8 +93,8 @@ contract DeployTestnet is Script {
                 keeperBps: 100,
                 minRebalanceInterval: 5 minutes,
                 depositCap: depositCap_,
-                bandWidth: 0,
-                bandBps: 0
+                bandWidth: 10,
+                bandBps: 5_000
             }),
             "Plumb MUSD Bid",
             "plumbBID"

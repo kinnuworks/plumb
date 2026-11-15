@@ -124,8 +124,8 @@ contract PlumbBidVaultInvariantTest is MezoFork {
                 keeperBps: 100,
                 minRebalanceInterval: 10 minutes,
                 depositCap: 0,
-                bandWidth: 0,
-                bandBps: 0
+                bandWidth: 10,
+                bandBps: 5_000
             }),
             "Plumb MUSD Bid",
             "plumbBID"
