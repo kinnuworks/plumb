@@ -1,6 +1,7 @@
 /**
  * Plumb keeper. Watches a PlumbBidVault (and optionally a PlumbAskStrategy) and calls
- * rebalance() when the book has drifted from the market. Anyone can run it: rebalance is
+ * rebalance() when the book has drifted from the market: the band has left the live price
+ * (it only earns gauge MEZO while in range) or the backstop bid sits too far away. Anyone can run it: rebalance is
  * permissionless, the vault pays the caller a small share of harvested MEZO, and every
  * transaction is simulated before it is sent.
  *
@@ -107,6 +108,8 @@ type VaultState = {
   depeg: number;
   holdings: readonly bigint[];
   bidId: bigint;
+  bandId: bigint;
+  bandWidth: number;
 };
 
 async function readVault(): Promise<VaultState> {
@@ -126,6 +129,8 @@ async function readVault(): Promise<VaultState> {
       { ...c, functionName: "currentDepeg" },
       { ...c, functionName: "holdings" },
       { ...c, functionName: "bid" },
+      { ...c, functionName: "band" },
+      { ...c, functionName: "bandWidth" },
     ],
   });
   return {
@@ -141,6 +146,8 @@ async function readVault(): Promise<VaultState> {
     depeg: Number(r[9]),
     holdings: r[10] as readonly bigint[],
     bidId: (r[11] as readonly [bigint, boolean])[0],
+    bandId: (r[12] as readonly [bigint, boolean])[0],
+    bandWidth: Number(r[13]),
   };
 }
 
@@ -152,8 +159,15 @@ async function vaultNeedsRebalance(s: VaultState): Promise<string | null> {
   if (s.depeg <= s.nearPar && parked > 0n) return "MUSD near $1: offer parked inventory";
   if (s.depeg > s.nearPar && askMusd > 0n) return "MUSD fell away from $1: park the ask";
 
+  const [, tick] = await pub.readContract({ address: s.pool, abi: poolAbi, functionName: "slot0" });
+  if (s.bandWidth > 0 && s.depeg < s.floor) {
+    if (s.bandId === 0n) return "no band on the price";
+    const band = await pub.readContract({ address: s.nfpm, abi: nfpmAbi, functionName: "positions", args: [s.bandId] });
+    // In range means tickLower <= tick < tickUpper; out of range the band earns no MEZO.
+    if (tick < band[5] || tick >= band[6]) return `band out of range (tick ${tick}, band ${band[5]}..${band[6]})`;
+  }
+
   if (s.bidId !== 0n) {
-    const [, tick] = await pub.readContract({ address: s.pool, abi: poolAbi, functionName: "slot0" });
     const pos = await pub.readContract({ address: s.nfpm, abi: nfpmAbi, functionName: "positions", args: [s.bidId] });
     const edgeTick = s.dir > 0 ? pos[5] : pos[6]; // the bid edge nearest the market
     const edgeDepeg = (edgeTick - s.parTick) * s.dir;
