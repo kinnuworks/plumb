@@ -25,8 +25,8 @@ test("vault page reads the live testnet vault: band, bid and total value", async
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Plumb vault");
   const total = page.locator("div", { hasText: /^Total value/ }).last();
   await expect(total).not.toContainText("–", { timeout: 45_000 });
-  await expect(page.getByText("On the price (band)")).toBeVisible();
-  const band = page.locator("div", { hasText: /^On the price \(band\)/ }).last();
+  await expect(page.getByText("At today's price (earns MEZO)")).toBeVisible();
+  const band = page.locator("div", { hasText: /^At today's price \(earns MEZO\)/ }).last();
   await expect(band).toContainText("MUSD", { timeout: 45_000 });
   await page.waitForTimeout(1500);
 });
