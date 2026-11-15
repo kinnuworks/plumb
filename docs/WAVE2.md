@@ -32,13 +32,13 @@ forge test --match-test 'test_bandEarnsMezoWhileThePegHolds|test_backstopCatches
 - The Wave 1 fork tests are re-pinned to block 13,238,000. Their sales were sized for October's thin book, so they now sell until a target price instead of a fixed amount. That change is test-only, in its own commit, and no assertion was loosened.
 - New suite `PlumbBand.fork.t.sol` (14 tests), plus band tests in the mirrored token order Mezo testnet uses. The first run of the mirrored test found a bug: on a thin pool the band's swap moved the price out of the band and the deposit reverted. Fixed in `2814b59`.
 - The invariant suite now runs the shipped layout, band on.
-- 75 unit and fork tests, 10 invariants, `slither` with no findings on the vault beyond reviewed informational ones.
+- 77 unit and fork tests and 10 invariants. A fresh security review found a high-severity bug in the band (its MUSD ratcheted into inventory with no trades until the vault stopped quoting), a band-swap sandwich and a MEZO rounding underflow. All three are fixed. The first two have tests that were written to fail first; the rounding fix is a guard on the payout. See `contracts/SECURITY.md`. `slither` has nothing further on the vault.
 
 ## Deployments
 
 | Network | Vault | Notes |
 |---|---|---|
-| Mezo testnet | `0xb9A01f76c438De8B931360C134F2c4B08913b990` | band on; first deposit tx `0x268e4c9bd2b0893a4c92e3cf2f29b4492dbebdb570ec11a156bc1e2b42e36bfe` |
+| Mezo testnet | `0x9688ef37203022054b8337e8b5dA220Eed24e481` | band on, with the review fixes; deposit tx `0xa061f72d3b2051615d1cc2f90c43a47973cedaf212b5c36ea5dee2d02314edf9`. The first v2 vault (`0xb9A01f76…b990`, before the review) was emptied by redeem `0x91b58f11…d813`. |
 | Mezo mainnet | pending | capped at 5,000 mUSDC on pool `0xCC372B7E…aC1a` and gauge `0x6d446E27…Fc57` |
 
 ## App
