@@ -74,7 +74,13 @@ async function clickAndConfirm(page: Page, name: string) {
   await expect(page.getByText("Confirmed:")).toBeVisible({ timeout: 120_000 });
   const href = (await link.first().getAttribute("href")) ?? "";
   const hash = href.split("/tx/")[1] as Hex;
-  const receipt = await pub.waitForTransactionReceipt({ hash });
+  // Mezo's testnet RPC sometimes answers "not found" for a mined transaction; ask again.
+  let receipt: Awaited<ReturnType<typeof pub.getTransactionReceipt>> | undefined;
+  for (let i = 0; i < 60 && !receipt; i++) {
+    receipt = await pub.getTransactionReceipt({ hash }).catch(() => undefined);
+    if (!receipt) await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (!receipt) throw new Error(`${name} transaction ${hash}: no receipt after 3 minutes`);
   expect(receipt.status, `${name} transaction ${hash}`).toBe("success");
   console.log(`${name}: ${hash}`);
 }
