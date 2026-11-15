@@ -177,6 +177,88 @@ contract MirroredLayoutForkTest is MezoFork {
         assertGt(u + m / 1e12, 9_800e6);
     }
 
+    /// The band on the live price, in the mirrored layout Mezo testnet uses. Like any live
+    /// pool, this one gets two-sided liquidity in the tick slot around the price first.
+    function test_bandInMirroredLayout() public {
+        (int24 sa, int24 sb) = PegMath.toTickRange(90, 110, vault.parTick(), -1);
+        _mint(sa, sb, 5_000e18, 5_000e6);
+        _settle(15 minutes);
+        _deployBandVault();
+        _bandCycle(true);
+    }
+
+    /// Same layout with nothing in the price's slot: the band's swap crosses empty ticks and
+    /// buys nothing. The deposit must still work, the band is skipped, and no value is lost.
+    function test_bandSkipsSafelyWhenThePriceSlotIsEmpty() public {
+        _deployBandVault();
+        _bandCycle(false);
+    }
+
+    function _deployBandVault() internal {
+        PlumbBidVault.Params memory p = PlumbBidVault.Params({
+            pool: mirrored,
+            nfpm: nfpm,
+            gauge: ICLGauge(address(0)),
+            smusd: IMUSDSavingsRate(Mezo.SMUSD),
+            usd: USD,
+            musd: Mezo.MUSD,
+            treasury: makeAddr("treasury"),
+            incentiveSink: address(0),
+            twapWindow: 600,
+            maxTwapDeviation: 30,
+            bidWidth: 200,
+            askWidth: 50,
+            floorDepeg: 400,
+            nearParDepeg: 20,
+            maxInventoryBps: 6_000,
+            feeBps: 1_000,
+            incentiveBps: 0,
+            keeperBps: 100,
+            minRebalanceInterval: 5 minutes,
+            depositCap: 0,
+            bandWidth: 10,
+            bandBps: 5_000
+        });
+        vault = new PlumbBidVault(p, "Plumb MUSD Bid", "plumbBID");
+    }
+
+    function _bandCycle(bool expectBand) internal {
+        uint256 shares = _deposit(10_000e6);
+        (uint256 bandId,) = vault.band();
+        if (!expectBand) {
+            assertEq(bandId, 0, "no band from an empty slot");
+            (uint256 bid_,) = vault.bid();
+            assertGt(bid_, 0, "the bid still goes up");
+            assertGe(vault.totalAssets(), 9_980e6);
+            vm.prank(alice);
+            (uint256 u0, uint256 m0) = vault.redeem(shares, 0, 0, alice);
+            assertGt(u0 + m0 / 1e12, 9_980e6);
+            return;
+        }
+        assertGt(bandId, 0, "band placed");
+        (,,,,, int24 tl, int24 tu, uint128 liq,,,,) = nfpm.positions(bandId);
+        int24 spot = _tick();
+        assertTrue(tl <= spot && spot < tu, "band contains the price");
+        assertGt(liq, 0);
+        // Never bought MUSD above $1: mirrored, dearer MUSD is a higher tick.
+        assertLe(spot, vault.parTick());
+
+        (uint256 bidId,) = vault.bid();
+        (,,,,, int24 bl, int24 bu,,,,,) = nfpm.positions(bidId);
+        // The bid never overlaps the band. It may start lower: it stays under the TWAP too,
+        // and here the band's own swap moved the thin pool's spot above the TWAP.
+        assertLe(bu, tl, "bid sits at or below the band's cheap edge");
+        assertLt(bl, bu);
+        assertGe(vault.totalAssets(), 9_980e6, "band funding cost under 0.2%");
+
+        _sell(Mezo.MUSD, USD, 6_000e18);
+        _settle(30 minutes);
+        vault.rebalance();
+        vm.prank(alice);
+        (uint256 u, uint256 m) = vault.redeem(shares, 0, 0, alice);
+        assertGt(u + m / 1e12, 9_800e6);
+    }
+
     function _tick() internal view returns (int24 t) {
         (, t,,,,) = mirrored.slot0();
     }
