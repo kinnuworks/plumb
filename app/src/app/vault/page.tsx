@@ -13,14 +13,17 @@ import {
   useWriteContract,
 } from "wagmi";
 import vaultAbi from "@/abi/PlumbBidVault.json";
-import { PLUMB_TESTNET } from "@/lib/addresses";
-import { mezoTestnet } from "@/lib/chains";
+import { PLUMB_MAINNET, PLUMB_TESTNET } from "@/lib/addresses";
+import { mezo, mezoTestnet } from "@/lib/chains";
 import { fmtNum } from "@/lib/peg";
 
-const VAULT = PLUMB_TESTNET.vault;
-const USD = PLUMB_TESTNET.usd;
 const USD_DECIMALS = 6;
-const vault = { address: VAULT, abi: vaultAbi, chainId: mezoTestnet.id } as const;
+const NETWORKS = {
+  mainnet: { label: "Mezo mainnet", chain: mezo, vault: PLUMB_MAINNET.vault, usd: PLUMB_MAINNET.usd },
+  testnet: { label: "Mezo testnet", chain: mezoTestnet, vault: PLUMB_TESTNET.vault, usd: PLUMB_TESTNET.usd },
+} as const;
+type Net = keyof typeof NETWORKS;
+const MAINNET_LIVE = PLUMB_MAINNET.vault !== zeroAddress;
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -32,6 +35,34 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 export default function VaultPage() {
+  const [net, setNet] = useState<Net>(MAINNET_LIVE ? "mainnet" : "testnet");
+  return (
+    <>
+      <div className="mx-auto max-w-3xl px-4 pt-6 flex gap-3 text-sm" role="tablist" aria-label="Network">
+        {(Object.keys(NETWORKS) as Net[]).map((n) => (
+          <button
+            key={n}
+            role="tab"
+            aria-selected={net === n}
+            className={net === n ? "font-semibold underline" : "opacity-70"}
+            onClick={() => setNet(n)}
+          >
+            {NETWORKS[n].label}
+            {n === "mainnet" && !MAINNET_LIVE ? " (not deployed yet)" : ""}
+          </button>
+        ))}
+      </div>
+      <VaultView key={net} net={net} />
+    </>
+  );
+}
+
+function VaultView({ net }: { net: Net }) {
+  const cfg = NETWORKS[net];
+  const VAULT = cfg.vault;
+  const USD = cfg.usd;
+  const chain = cfg.chain;
+  const vault = { address: VAULT, abi: vaultAbi, chainId: chain.id } as const;
   const { address, chainId, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
@@ -57,18 +88,30 @@ export default function VaultPage() {
       { ...vault, functionName: "minRebalanceInterval" },
       { ...vault, functionName: "floorDepeg" },
       { ...vault, functionName: "bandHoldings" },
+      { ...vault, functionName: "pendingMezo", args: [me] },
     ],
   });
-  const [totalAssets, holdings, depeg, supply, myShares, lastRebalance, interval, floor, band] = (reads.data ?? []).map(
-    (r) => r?.result,
-  ) as [bigint?, (readonly bigint[])?, number?, bigint?, bigint?, bigint?, number?, number?, (readonly bigint[])?];
+  const [totalAssets, holdings, depeg, supply, myShares, lastRebalance, interval, floor, band, myMezo] = (
+    reads.data ?? []
+  ).map((r) => r?.result) as [
+    bigint?,
+    (readonly bigint[])?,
+    number?,
+    bigint?,
+    bigint?,
+    bigint?,
+    number?,
+    number?,
+    (readonly bigint[])?,
+    bigint?,
+  ];
 
   const usdBalance = useReadContract({
     address: USD,
     abi: erc20Abi,
     functionName: "balanceOf",
     args: [me],
-    chainId: mezoTestnet.id,
+    chainId: chain.id,
     query: { enabled: isConnected },
   });
   const allowance = useReadContract({
@@ -76,7 +119,7 @@ export default function VaultPage() {
     abi: erc20Abi,
     functionName: "allowance",
     args: [me, VAULT],
-    chainId: mezoTestnet.id,
+    chainId: chain.id,
     query: { enabled: isConnected && deployed },
   });
 
@@ -84,7 +127,7 @@ export default function VaultPage() {
   const musd = (x?: bigint) => (x === undefined ? "–" : `${fmtNum(Number(formatUnits(x, 18)), 2)} MUSD`);
   const myValue =
     totalAssets !== undefined && supply && myShares !== undefined && supply > 0n ? (totalAssets * myShares) / supply : 0n;
-  const wrongChain = isConnected && chainId !== mezoTestnet.id;
+  const wrongChain = isConnected && chainId !== chain.id;
   const amountWei = (() => {
     try {
       return parseUnits(amount || "0", USD_DECIMALS);
@@ -113,15 +156,13 @@ export default function VaultPage() {
         <p className="opacity-80">
           Deposit mUSDC. Half goes into a band on MUSD&apos;s live price, staked in the pool&apos;s gauge so it earns MEZO
           while MUSD trades normally. The rest is a bid from the band down to about $0.98. MUSD the vault buys below $1
-          waits in sMUSD and is offered back only at $1 or above. Withdrawals are paid in kind, any time. Running on Mezo
-          testnet.
+          waits in sMUSD and is offered back only at $1 or above. Withdrawals are paid in kind, any time. Pick the network above.
         </p>
       </header>
 
       {!deployed && (
         <p className="rounded-lg border border-current/20 p-4 text-sm">
-          The testnet vault address is not configured. Deploy with contracts/script/DeployTestnet.s.sol and set
-          NEXT_PUBLIC_TESTNET_VAULT.
+          This network&apos;s vault is not deployed yet.
         </p>
       )}
 
@@ -147,7 +188,7 @@ export default function VaultPage() {
           ) : (
             <button
               className="rounded-md bg-current/90 px-3 py-1.5 text-sm"
-              onClick={() => connect({ connector: connectors[0], chainId: mezoTestnet.id })}
+              onClick={() => connect({ connector: connectors[0], chainId: chain.id })}
             >
               <span className="text-[var(--background)]">Connect wallet</span>
             </button>
@@ -155,8 +196,8 @@ export default function VaultPage() {
         </div>
 
         {wrongChain && (
-          <button className="underline text-sm" onClick={() => switchChain({ chainId: mezoTestnet.id })}>
-            Switch to Mezo testnet
+          <button className="underline text-sm" onClick={() => switchChain({ chainId: chain.id })}>
+            Switch to {cfg.label}
           </button>
         )}
 
@@ -164,6 +205,10 @@ export default function VaultPage() {
           <>
             <Row label="Your share value" value={usd(myValue)} />
             <Row label="Your mUSDC" value={usd(usdBalance.data)} />
+            <Row
+              label="MEZO earned, ready to claim"
+              value={myMezo === undefined ? "–" : `${fmtNum(Number(formatUnits(myMezo, 18)), 2)} MEZO`}
+            />
 
             <div className="flex gap-2 pt-2">
               <input
@@ -225,7 +270,7 @@ export default function VaultPage() {
         {txHash && (
           <p className="text-sm">
             {receipt.isLoading ? "Waiting for confirmation… " : receipt.isSuccess ? "Confirmed: " : ""}
-            <a className="underline" href={`${mezoTestnet.blockExplorers.default.url}/tx/${txHash}`}>
+            <a className="underline" href={`${chain.blockExplorers.default.url}/tx/${txHash}`}>
               {txHash.slice(0, 10)}…
             </a>
           </p>

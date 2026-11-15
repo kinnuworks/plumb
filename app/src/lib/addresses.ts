@@ -25,5 +25,11 @@ export const PLUMB_TESTNET = {
   usd: "0xe1a26db653708A2AD8F824E92Db9852410e33A59" as Address,
 };
 
+/** Plumb's capped mainnet vault, once deployed (contracts/script/DeployMainnet.s.sol). */
+export const PLUMB_MAINNET = {
+  vault: (process.env.NEXT_PUBLIC_MAINNET_VAULT ?? "0x0000000000000000000000000000000000000000") as Address,
+  usd: "0x04671C72Aab5AC02A03c1098314b1BB6B560c197" as Address,
+};
+
 /** Address the quoter's bytecode is placed at for state-override calls. Nothing lives here. */
 export const QUOTER_OVERRIDE_ADDRESS: Address = "0x000000000000000000000000000000000000bEEF";
