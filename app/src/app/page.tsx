@@ -1,6 +1,8 @@
 import { getPegSnapshot } from "@/lib/snapshot";
 import { fmtCompact, fmtNum, fmtUsd } from "@/lib/peg";
 import { DepthHistoryChart } from "@/components/DepthHistoryChart";
+import { LiveDepthPanel } from "@/components/LiveDepthPanel";
+import Link from "next/link";
 import history from "@/data/depthHistory.json";
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
@@ -22,13 +24,29 @@ export default async function Observatory() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 space-y-12">
       <header className="space-y-3">
-        <h1 className="text-3xl font-semibold">MUSD peg observatory</h1>
+        <h1 className="text-3xl font-semibold">A standing bid under MUSD</h1>
         <p className="opacity-80 max-w-3xl">
-          State of MUSD&apos;s market on Mezo, read from chain when this page was built. Data as of block{" "}
-          <a className="underline" href={`https://explorer.mezo.org/block/${s.block}`}>{s.block}</a>. Every number on this
-          page can be recomputed with a single eth_call.
+          Most of the buyers for MUSD on Mezo sit in one tick of the main MUSD/mUSDC pool: 7 of its 11 gauge-staked
+          positions, holding 94% of its liquidity. Below that tick the pool holds almost no USD. Plumb is a capped vault
+          that lets anyone fund that buy side with mUSDC, and pays them the pool&apos;s MEZO rewards for it.
+        </p>
+        <p className="text-sm">
+          <Link className="underline" href="/vault">Open the vault</Link>
+          {" · "}
+          <Link className="underline" href="/how">How it works</Link>
         </p>
       </header>
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-semibold">What selling MUSD pays right now</h2>
+        <LiveDepthPanel />
+      </section>
+
+      <p className="text-sm opacity-70 max-w-3xl">
+        The rest of this page was read from chain when the site was built, at block{" "}
+        <a className="underline" href={`https://explorer.mezo.org/block/${s.block}`}>{s.block}</a>. Every number can be
+        recomputed with a single eth_call.
+      </p>
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="MUSD on Mezo" value={`$${s.musdPrice.toFixed(4)}`} note={`${((1 - s.musdPrice) * 10_000).toFixed(0)} bps under $1`} />
@@ -38,7 +56,7 @@ export default async function Observatory() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">What selling MUSD on Mezo pays right now</h2>
+        <h2 className="text-xl font-semibold">What selling MUSD paid at build time</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm tabular-nums">
             <thead className="text-left opacity-60">
@@ -58,10 +76,11 @@ export default async function Observatory() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-xl font-semibold">The buy side disappeared in October</h2>
+        <h2 className="text-xl font-semibold">When those positions leave, the buy side goes with them</h2>
         <p className="opacity-80 max-w-3xl">
-          From late August to mid October a 100,000 MUSD sale paid about $99,000. Since Oct 18 the bid side has thinned.
-          Replayed at a block on {worstDate}, selling 10,000 MUSD would have paid {fmtUsd(worst.usdFor10k)}.
+          From late August to mid October a 100,000 MUSD sale paid about $99,000. Then the bid side thinned: replayed at a
+          block on {worstDate}, selling 10,000 MUSD would have paid {fmtUsd(worst.usdFor10k)}. Depth came back once
+          the concentrated positions returned.
         </p>
         <DepthHistoryChart />
       </section>

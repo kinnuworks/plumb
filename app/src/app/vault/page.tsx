@@ -56,11 +56,12 @@ export default function VaultPage() {
       { ...vault, functionName: "lastRebalance" },
       { ...vault, functionName: "minRebalanceInterval" },
       { ...vault, functionName: "floorDepeg" },
+      { ...vault, functionName: "bandHoldings" },
     ],
   });
-  const [totalAssets, holdings, depeg, supply, myShares, lastRebalance, interval, floor] = (reads.data ?? []).map(
+  const [totalAssets, holdings, depeg, supply, myShares, lastRebalance, interval, floor, band] = (reads.data ?? []).map(
     (r) => r?.result,
-  ) as [bigint?, (readonly bigint[])?, number?, bigint?, bigint?, bigint?, number?, number?];
+  ) as [bigint?, (readonly bigint[])?, number?, bigint?, bigint?, bigint?, number?, number?, (readonly bigint[])?];
 
   const usdBalance = useReadContract({
     address: USD,
@@ -110,8 +111,10 @@ export default function VaultPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold">Plumb vault</h1>
         <p className="opacity-80">
-          Deposit mUSDC and it becomes a bid for MUSD just under the market price. MUSD the vault buys is offered back
-          only at $1 or above. Withdrawals are paid in kind, any time. Running on Mezo testnet.
+          Deposit mUSDC. Half goes into a band on MUSD&apos;s live price, staked in the pool&apos;s gauge so it earns MEZO
+          while MUSD trades normally. The rest is a bid from the band down to about $0.98. MUSD the vault buys below $1
+          waits in sMUSD and is offered back only at $1 or above. Withdrawals are paid in kind, any time. Running on Mezo
+          testnet.
         </p>
       </header>
 
@@ -127,6 +130,7 @@ export default function VaultPage() {
         <Row label="Total value" value={usd(totalAssets)} />
         <Row label="MUSD price (TWAP)" value={depeg === undefined ? "–" : `$${(1 - depeg / 10_000).toFixed(4)}`} />
         <Row label="USD waiting" value={usd(holdings?.[0])} />
+        <Row label="On the price (band)" value={band ? `${usd(band[0])} + ${musd(band[1])}` : "–"} />
         <Row label="USD bidding for MUSD" value={usd(holdings?.[3])} />
         <Row label="MUSD bought, held" value={musd(holdings ? holdings[1] + holdings[2] + holdings[4] : undefined)} />
         <Row label="MUSD offered at $1 or more" value={musd(holdings?.[6])} />
