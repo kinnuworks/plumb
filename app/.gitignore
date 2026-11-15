@@ -42,3 +42,4 @@ next-env.d.ts
 .preview/
 test-results/
 playwright-report/
+.env.e2e
