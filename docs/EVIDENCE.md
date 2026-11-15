@@ -69,3 +69,26 @@ Run `MEZO_RPC_URL=https://mezo-mainnet.boar.network forge test -vv` in `contract
 ## Mainnet history
 
 `data/depth_history.csv` recomputes the 10k and 100k MUSD sell quotes every two days from Aug 28 to Oct 26 with the same quoter. The command in the README reproduces any row.
+
+## Wave 2 (2026-11-15)
+
+Mezo testnet, explorer https://explorer.test.mezo.org
+
+| What | Transaction or address |
+|---|---|
+| Vault v2 with the band, review fixes included, source verified | [`0x9688ef37203022054b8337e8b5dA220Eed24e481`](https://explorer.test.mezo.org/address/0x9688ef37203022054b8337e8b5dA220Eed24e481) |
+| First deposit (350 mUSDC) | [`0xa061f72d…edf9`](https://explorer.test.mezo.org/tx/0xa061f72d3b2051615d1cc2f90c43a47973cedaf212b5c36ea5dee2d02314edf9) |
+| Keeper rebalance that placed the band on the price | [`0x3f3421fb…ddcc`](https://explorer.test.mezo.org/tx/0x3f3421fbdbf43661a4171867e5ce0c6cb1022a05de93d98949c801a091f2ddcc) |
+| Browser wallet: approve, deposit, withdraw | [`0x7e305fe1…7ad3`](https://explorer.test.mezo.org/tx/0x7e305fe1b8bb319e0f9a1165f198c54d4012caafc67bdde4940db4c398af7ad3), [`0xea3c4b2c…16ac`](https://explorer.test.mezo.org/tx/0xea3c4b2c76d519dad0427e0ab39c8a49e73a290ddafdf6b5c91c31f8bbe716ac), [`0x1e799850…05bf`](https://explorer.test.mezo.org/tx/0x1e7998501771ce28d49dcbe5df0ed0f27ef90970e4ec46321bf82022827a05bf) |
+| Pre-review v2 vault, emptied by redeem | [`0x91b58f11…d813`](https://explorer.test.mezo.org/tx/0x91b58f1158d5ecb5a6db64dc81e100c2844bac99a45e610f24d7a7a23a1cd813) |
+
+Mezo mainnet fork (block 13,238,000), `contracts/test/fork/PlumbBand.fork.t.sol`:
+
+| Claim | Test | Output |
+|---|---|---|
+| A quiet day, $20,000: band + bid vs bid only | `test_bandEarnsMezoWhileThePegHolds` | 3,975.5 MEZO vs 0 |
+| A 400k MUSD sale before and after a $50,000 deposit | `test_backstopCatchesALargeSale` | $111,687 to $161,679 |
+| 8 quiet rebalances keep band and bid, no inventory | `test_bandSurvivesRebalancesWithNoTrades` | 0 MUSD inventory |
+| Front-running the band swap doesn't pay | `test_bandSwapCannotBeSandwiched` | attacker ends $124.6 down |
+
+Mainnet: pending deployment.
