@@ -6,6 +6,12 @@ Almost all of MUSD's buyers on Mezo sit in one tick of the main MUSD/mUSDC pool.
 
 **Try it in 30 seconds:** open [kinnuworks.github.io/plumb](https://kinnuworks.github.io/plumb/). The first screen reads Mezo mainnet in your browser and shows what selling 10k to 500k MUSD pays at the current block. No wallet needed. The [vault page](https://kinnuworks.github.io/plumb/vault/) shows the live testnet vault's band, bid and value.
 
+**Who it's for:** anyone on Mezo holding mUSDC who wants it to earn. The pool's gauge already pays about 87,350 MEZO a day for liquidity at the price; today a handful of positions collect it.
+
+**What it earns, and costs:** in a mainnet fork test, $20,000 deposited earned 3,509 MEZO in one quiet day after fees. At today's MEZO price (about 0.0030 MUSD in the MEZO/MUSD pool) that is about $10.50 a day, roughly 19% a year if emissions and price held. It falls as more liquidity joins that tick. The vault keeps 10% of MEZO as a fee, posts 10% back to the gauge's voters, and tips 1% to whoever calls `rebalance()`, which costs about $0.17 in gas. The risk is MUSD bought below $1, held until it sells at $1 or more.
+
+**Safety:** no owner and no admin keys, every parameter fixed at deploy, deposits capped at 5,000 mUSDC. Not audited. A fresh review found one high, one medium and one low issue in the Wave 2 code; all are fixed, with tests ([SECURITY.md](contracts/SECURITY.md)). 77 unit and mainnet-fork tests and 10 invariant properties pass.
+
 New in Wave 2: [what changed since Wave 1](docs/WAVE2.md).
 
 ## For judges: two minutes
