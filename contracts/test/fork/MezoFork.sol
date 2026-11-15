@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
 
 import {ICLPool, INonfungiblePositionManager, ICLGauge, IPoolsVoter} from "../../src/interfaces/IMezoCL.sol";
 import {ICLSwapRouter} from "../../src/interfaces/ICLSwapRouter.sol";
@@ -25,7 +26,7 @@ library Mezo {
 
 /// Shared fork fixture. Pins a block so every run sees the same pool state.
 abstract contract MezoFork is Test {
-    uint256 internal constant FORK_BLOCK = 12_772_660;
+    uint256 internal constant FORK_BLOCK = 13_238_000;
 
     ICLPool internal pool = ICLPool(Mezo.POOL);
     INonfungiblePositionManager internal nfpm = INonfungiblePositionManager(Mezo.NFPM);
@@ -70,6 +71,31 @@ abstract contract MezoFork is Test {
                 amountIn: amount,
                 amountOutMinimum: 0,
                 sqrtPriceLimitX96: 0
+            })
+        );
+        vm.stopPrank();
+    }
+
+    /// Like _swap, but stops at `limitTick`. Used to move the price to a target through ticks
+    /// that hold no liquidity (above ~$0.994 the live pool holds almost no MUSD for sale).
+    function _swapToTick(address tokenIn, address tokenOut, uint256 amount, int24 limitTick)
+        internal
+        returns (uint256 out)
+    {
+        address trader = makeAddr("trader");
+        deal(tokenIn, trader, amount);
+        vm.startPrank(trader);
+        IERC20(tokenIn).approve(address(router), amount);
+        out = router.exactInputSingle(
+            ICLSwapRouter.ExactInputSingleParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                tickSpacing: 10,
+                recipient: trader,
+                deadline: block.timestamp,
+                amountIn: amount,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: TickMath.getSqrtRatioAtTick(limitTick)
             })
         );
         vm.stopPrank();

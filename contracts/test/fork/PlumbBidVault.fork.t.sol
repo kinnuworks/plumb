@@ -109,9 +109,9 @@ contract PlumbBidVaultForkTest is MezoFork {
     }
 
     function test_depositMakesSellingMusdCheaper() public {
-        // The pool's ~$38.6k of USD sits within a few ticks of the price. A 100k MUSD sell
-        // drains it and the price falls through empty ticks. Plumb's bid catches that sale.
-        uint256 sell = 100_000e18;
+        // Today ~$150k of USD sits in the one tick slot at the price. A 400k MUSD sell drains
+        // it and the price falls through thin ticks. Plumb's bid catches that sale.
+        uint256 sell = 400_000e18;
         uint256 before = _quoteSellMusd(sell);
 
         _depositFor(alice, 25_000e6);
@@ -128,7 +128,7 @@ contract PlumbBidVaultForkTest is MezoFork {
 
     function test_sellOffFillsBidAndInventoryIsParked() public {
         _depositFor(alice, 25_000e6);
-        _swap(Mezo.MUSD, Mezo.MUSDC, 60_000e18); // drain the pool's USD and push into the bid
+        _sellUntilDepeg(150); // drain the pool's USD and push into the bid
 
         // holdings() prices at the TWAP on purpose, so let it catch up before reading fills.
         _settle(1 hours);
@@ -147,7 +147,7 @@ contract PlumbBidVaultForkTest is MezoFork {
 
     function test_mezoStreamsToHolders() public {
         _depositFor(alice, 25_000e6);
-        _swap(Mezo.MUSD, Mezo.MUSDC, 50_000e18); // move the price into the bid so it earns
+        _sellUntilDepeg(120); // move the price into the bid so it earns
         _settle(1 days);
 
         uint256 treasuryBefore = mezo.balanceOf(treasury);
@@ -170,7 +170,7 @@ contract PlumbBidVaultForkTest is MezoFork {
         uint256 bShares = _depositFor(bob, 10_000e6);
         assertApproxEqRel(aShares, bShares * 3, 1e15);
 
-        _swap(Mezo.MUSD, Mezo.MUSDC, 50_000e18); // vault now holds both tokens
+        _sellUntilDepeg(120); // vault now holds both tokens
 
         vm.prank(bob);
         (uint256 usdOut, uint256 musdOut) = vault.redeem(bShares, 0, 0, bob);
@@ -218,7 +218,7 @@ contract PlumbBidVaultForkTest is MezoFork {
     }
 
     function test_depositRefusesManipulatedPrice() public {
-        _swap(Mezo.MUSD, Mezo.MUSDC, 80_000e18); // dump MUSD in this block
+        _sellUntilDepeg(vault.currentDepeg() + 40); // dump MUSD in this block
         deal(Mezo.MUSDC, alice, 1_000e6);
         vm.startPrank(alice);
         usdc.approve(address(vault), 1_000e6);
@@ -282,7 +282,7 @@ contract PlumbBidVaultForkTest is MezoFork {
     /// that existing holders earned before it arrived.
     function test_flashDepositCannotSnipeMezo() public {
         _depositFor(alice, 25_000e6);
-        _swap(Mezo.MUSD, Mezo.MUSDC, 50_000e18); // price into the bid so it earns
+        _sellUntilDepeg(120); // price into the bid so it earns
         _settle(1 days); // a day of rewards sits unharvested in the gauge
 
         address attacker = makeAddr("attacker");
@@ -335,7 +335,7 @@ contract PlumbBidVaultForkTest is MezoFork {
 
     function test_transferKeepsEarnedMezoWithSender() public {
         _depositFor(alice, 25_000e6);
-        _swap(Mezo.MUSD, Mezo.MUSDC, 50_000e18);
+        _sellUntilDepeg(120);
         _settle(1 days);
 
         uint256 shares = vault.balanceOf(alice);
@@ -394,7 +394,7 @@ contract PlumbBidVaultForkTest is MezoFork {
 
     function test_exitSurvivesSmusdOutage() public {
         _depositFor(alice, 25_000e6);
-        _swap(Mezo.MUSD, Mezo.MUSDC, 60_000e18);
+        _sellUntilDepeg(150);
         _settle(1 hours);
         vm.prank(keeper);
         vault.rebalance();
@@ -482,7 +482,7 @@ contract PlumbBidVaultForkTest is MezoFork {
 
     function test_recoveryOffersInventoryBackAtParOrBetter() public {
         _depositFor(alice, 25_000e6);
-        _swap(Mezo.MUSD, Mezo.MUSDC, 60_000e18);
+        _sellUntilDepeg(150);
         _settle(1 hours);
         vm.prank(keeper);
         vault.rebalance(); // parks bought MUSD
@@ -503,13 +503,19 @@ contract PlumbBidVaultForkTest is MezoFork {
         assertEq(parked, 0, "MUSD left sMUSD to be sold");
     }
 
-    /// Buys MUSD with USD until the spot depeg is at most `target` ticks.
-    function _pushDepegTo(int24 target) internal {
-        for (uint256 i; i < 60; i++) {
-            int24 depeg = (_spotTick() - vault.parTick()) * vault.dir();
-            if (depeg <= target) return;
-            _swap(Mezo.MUSDC, Mezo.MUSD, 250_000e6);
+    /// Sells MUSD into the pool in 20k chunks until the spot price is at least `target`
+    /// depeg ticks below $1. Sizes sales to the pool's depth at the fork block, which changes.
+    function _sellUntilDepeg(int24 target) internal {
+        for (uint256 i; i < 200; i++) {
+            if ((_spotTick() - vault.parTick()) * vault.dir() >= target) return;
+            _swap(Mezo.MUSD, Mezo.MUSDC, 20_000e18);
         }
         revert("could not reach target");
+    }
+
+    /// Buys MUSD with USD until the spot depeg is at most `target` ticks.
+    function _pushDepegTo(int24 target) internal {
+        _swapToTick(Mezo.MUSDC, Mezo.MUSD, 5_000_000e6, vault.parTick() + target * vault.dir());
+        assertLe((_spotTick() - vault.parTick()) * vault.dir(), target, "could not reach target");
     }
 }

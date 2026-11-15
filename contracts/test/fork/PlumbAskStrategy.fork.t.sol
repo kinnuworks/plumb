@@ -86,7 +86,7 @@ contract PlumbAskStrategyForkTest is MezoFork {
         strategy.rebalance();
         uint256 principal = strategy.principal();
 
-        // Demand for MUSD returns: buyers clear the 5.3M MUSD wall below $1 and lift MUSD
+        // Demand for MUSD returns: buyers lift MUSD
         // into the order at $1.001 and up.
         _buyMusdUntilDepeg(-12);
         _settle(1 hours);
@@ -95,8 +95,9 @@ contract PlumbAskStrategyForkTest is MezoFork {
         assertGt(usdHeld, 0, "order should have sold MUSD for USD");
         console2.log("USD received for MUSD sold at >= $1.001:", usdHeld / 1e6);
 
-        // The price falls back below par; the strategy buys MUSD back cheaper.
-        _swap(Mezo.MUSD, Mezo.MUSDC, 3_000_000e18);
+        // The price falls back below par; the strategy buys MUSD back cheaper. The sale stops
+        // at about $0.997: below ~$0.994 the live pool's own liquidity would absorb it.
+        _sellMusdToDepeg(30);
         _settle(2 hours);
         vm.warp(block.timestamp + 10 minutes);
         strategy.rebalance();
@@ -311,7 +312,9 @@ contract PlumbAskStrategyForkTest is MezoFork {
         smusd.setStrategy(address(next));
 
         // Once MUSD trades back below the sell price, the switch goes through with no USD left.
-        _swap(Mezo.MUSD, Mezo.MUSDC, 3_000_000e18);
+        // The sale stops inside the live pool's deep tick (about $0.9935), where the buyback
+        // can fill without moving the price through empty ticks.
+        _sellMusdToDepeg(65);
         _settle(1 hours);
         uint256 principal = strategy.principal();
         vm.prank(owner);
@@ -419,11 +422,12 @@ contract PlumbAskStrategyForkTest is MezoFork {
     }
 
     function _buyMusdUntilDepeg(int24 target) internal {
-        for (uint256 i; i < 80; i++) {
-            int24 depeg = (_spotTick() - strategy.parTick()) * strategy.dir();
-            if (depeg <= target) return;
-            _swap(Mezo.MUSDC, Mezo.MUSD, 250_000e6);
-        }
-        revert("could not reach target");
+        if ((_spotTick() - strategy.parTick()) * strategy.dir() <= target) return;
+        _swapToTick(Mezo.MUSDC, Mezo.MUSD, 5_000_000e6, strategy.parTick() + target * strategy.dir());
+        assertLe((_spotTick() - strategy.parTick()) * strategy.dir(), target, "could not reach target");
+    }
+
+    function _sellMusdToDepeg(int24 target) internal {
+        _swapToTick(Mezo.MUSD, Mezo.MUSDC, 3_000_000e18, strategy.parTick() + target * strategy.dir());
     }
 }
