@@ -1,76 +1,52 @@
-# Plumb: submission pack
+# Plumb: Wave 2 submission pack
 
 ## AKINDO form answers
 
 **Project name:** Plumb
 
-**Category:** DeFi liquidity
+**Category:** MUSD peg liquidity vault
 
-**TL;DR:** Plumb is a peg module for MUSD built from Mezo's own pool, gauge and sMUSD vault: stablecoins become standing bids just under MUSD's price, what they buy earns in sMUSD, and it is sold back only at $1 or more.
+**TL;DR:** A capped vault on Mezo that pays stablecoin holders the main MUSD pool's MEZO rewards to keep buyers under MUSD: a band on the live price, and a bid below it down to about $0.98.
+
+**What changed since Wave 1:**
+- The vault now earns while the peg holds. Wave 1's bid sat one tick under the market, and the gauge pays only liquidity in range, so it earned nothing on a normal day. Wave 2 adds a band on the live price, staked in the gauge. In a mainnet fork test, $20,000 earned 3,976 MEZO in a quiet day with the band and 0 without it.
+- A fresh security review of the new code found one high, one medium and one low issue. All three are fixed, the first two with tests written to fail first ([SECURITY.md](../contracts/SECURITY.md)).
+- The live app's first screen reads Mezo mainnet in the browser, with no wallet: what selling 10k to 500k MUSD pays at the current block. A browser test walks connect, approve, deposit and withdraw with a real wallet on testnet.
+- The Wave 1 fork tests are re-pinned to today's mainnet (block 13,238,000). 77 unit and fork tests and 10 invariants pass.
+- A capped mainnet vault on the real MUSD/mUSDC pool and gauge: pending deployment.
 
 **How it works:**
-MUSD trades at $0.99 and Mezo's main MUSD/mUSDC pool has about 5.3 million MUSD for sale against $38,581 of buyers. Until mid October a 100,000 MUSD sale on that pool typically paid about $99,000. Replayed at a block on October 22, selling 10,000 MUSD would have paid $11, after the bid side thinned. Every figure is recomputable at any block with our quoter.
+Nearly every buyer of MUSD on Mezo is a handful of positions parked at one price. In the main MUSD/mUSDC pool, 6 of the 10 positions staked in its gauge sit in one tick range and hold 93% of the staked liquidity. The whole pool's buy side is about $111,709: selling 100,000 MUSD pays $99,284, and selling 500,000 pays $111,687, because the buyers run out. When those positions stepped away in October, a 10,000 MUSD sale replayed at a block on Oct 22 would have paid $11.
 
-Plumb puts buyers back. Depositors supply mUSDC, which the vault places as a concentrated bid from one tick under the market to about 2% deeper, staked in the pool's gauge for MEZO. MUSD the bid buys earns in sMUSD while MUSD is under $1, and is offered back only at $1 or more once the price recovers. On a fork of today's mainnet, a $25,000 deposit lifts what a 100,000 MUSD sale pays from $38,556 to $63,556.
+Plumb adds buyers from outside. Depositors put in mUSDC. Half goes into a band on the live price: the vault swaps just enough mUSDC into MUSD to fill it, never paying more than the TWAP price plus one tick slot or more than $1, and stakes it in the pool's gauge. The rest is a bid from the band's lower edge down to about $0.98. MUSD bought below $1 earns in sMUSD and is offered back only at $1 or more. MEZO streams to depositors after a 10% fee, a 10% incentive posted back to the same gauge's voters, and a 1% tip to whoever calls `rebalance()`. Exits are pro rata and in kind, any time. No owner, no admin keys, deposits capped at 5,000 mUSDC.
 
-The same mechanics power a strategy for sMUSD. Its 7.38M MUSD currently sits in the default IdleStrategy as plain MUSD. PlumbAskStrategy keeps 95% idle and offers the rest only at $1.001 and up, so savers never sell below par. On the fork, sMUSD's real owner switches to it with one call. A full cycle sold 27,158 MUSD above $1.001 and returned 164 MUSD of profit to savers.
+On a fork of mainnet, a $50,000 deposit lifts what a 400,000 MUSD sale pays from $111,687 to $161,679.
 
-MUSD is the asset being supported, the inventory and the savings yield. MEZO is the reward stream, and a share of it goes back to the gauge as an incentive so veBTC voters send more emissions to the pool that defends the peg.
+**Target group:** Holders of mUSDC on Mezo who want it to earn the MEZO the pool's gauge already pays (about 87,350 MEZO a day to liquidity at the price), and Mezo itself, whose MUSD buy side today rests on a few positions. Anyone can read the live depth page without a wallet.
 
-**Target group:** Stablecoin holders on Mezo and Base who want yield for providing the liquidity MUSD lacks; Mezo's savings vault and treasury; and anyone watching MUSD's peg (the observatory is public and needs no wallet). Desktop and mobile web.
+**Tech stack:** Solidity 0.8.28 and Foundry (mainnet-fork tests against Mezo's real pool, gauge and sMUSD; fuzz and invariant suites; Slither), Uniswap v3 math libraries, Next.js 15, viem and wagmi, Playwright, a TypeScript keeper.
 
-**Tech stack:** Solidity 0.8.28 and Foundry (fork tests against Mezo mainnet, fuzz and invariant suites, Slither), Uniswap v3 math libraries, Next.js 15, viem and wagmi, a TypeScript keeper.
+**Track:** Track 1 (DeFi), and Track 2 (Access and Distribution).
+- Track 1: outside capital funds MUSD's buy side and earns Mezo's gauge rewards for it, with bought MUSD parked in sMUSD.
+- Track 2: anyone with mUSDC can provide MUSD liquidity from a page that shows, live and without a wallet, what MUSD holders can sell for.
 
-**Track:** Track 1, DeFi.
+**Chain deployed on:** Mezo testnet (vault `0x9688ef37203022054b8337e8b5dA220Eed24e481`, source verified) Mezo mainnet: capped vault on the real pool and gauge, pending deployment (the README will carry the address).
 
-**Chain deployed on:** Mezo testnet. PlumbBidVault `0xA27AbD357f28c41732EA6670278140284fbAcF9E`, MUSD/mUSDC CL pool `0xf6212414351f29AB816371f6b4ceE51960916c2a` (created with mainnet's fee tier and spacing). Mainnet integration proven against Mezo's real contracts on a fork pinned at block 12,772,660.
+**Project status:** Wave 2 resubmission of a Wave 1 project, with the changes listed above.
 
-**Project status:** Entirely new, built during Wave 1.
-
-**Project readiness:** Live on Mezo testnet: a verified, capped vault with real deposit, fill, keeper rebalance and withdrawal transactions (docs/EVIDENCE.md). App: https://kinnuworks.github.io/plumb/. Every mainnet claim reproduces with one `forge test` command against Mezo mainnet's real contracts. Next: a capped mainnet launch by Nov 15 (Wave 2).
+**Project readiness:** Testnet vault live and verified, with deposit, keeper rebalance and withdrawal transactions. Mainnet vault (capped at 5,000 mUSDC): pending deployment. App: https://kinnuworks.github.io/plumb/
 
 **Future milestones:**
-1. By Nov 15 (Wave 2): mainnet vault with a deposit cap, live depth meter on the observatory, and the vault on Aero's MUSD/USDC pool on Base.
-2. December 2026: external review, then raise the cap.
-3. Q1 2027: governance proposal to move sMUSD's idle MUSD into PlumbAskStrategy under published caps.
+1. Raise the cap as outside depositors join, after an external review.
+2. The same vault on Aero's MUSD/USDC pool on Base, where Mezo's gauges already pay.
+3. A governance proposal to put sMUSD's idle MUSD behind the peg with the optional ask strategy.
 
 **Team:** Kinnu (solo builder: contracts, app, keeper). X: [@heykinnu](https://x.com/heykinnu). GitHub: [kinnuworks](https://github.com/kinnuworks).
 
-## Deck (10 slides)
+## Deck
 
-1. **Plumb.** A peg module for MUSD, built from Mezo's own pool, gauge and savings vault.
-2. **The book today.** About 5.3M MUSD offered between $0.99 and $1.00. $38,581 bid. Price $0.990. Chart of the pool's liquidity by tick.
-3. **What happened in October.** Line chart: USD paid for a 100,000 MUSD sale, Aug 28 to Oct 26. Flat at $99k, then the drop. Callout: replayed at a block on Oct 22, a 10,000 MUSD sale would have paid $11.
-4. **Why it matters.** Trove debt is 14,489 MUSD against 16.59 BTC, so few borrowers need to buy MUSD back. 96.7% of MUSD supply sits in protocol contracts. Borrowers need a dollar that holds $1.
-5. **The vault.** Deposit mUSDC, a bid under the market, staked in the gauge, MEZO to depositors. Diagram of bid, park in sMUSD, ask at $1.
-6. **Proof on a mainnet fork.** $25k deposit: a 100k MUSD sale pays $63,556 instead of $38,556. One day in range: about 40,600 MEZO.
-7. **sMUSD strategy.** 7.38M MUSD idle today. One `setStrategy` call. 95% stays idle, orders only at $1.001+. Full cycle: 27,158 MUSD sold above par, 164 MUSD profit to savers, everything returned on switch back.
-8. **Safety.** No owner, immutable parameters, TWAP checks against manipulation, in-kind exits, floor and inventory caps, no signatures. Invariant suite found and closed a real share-pricing bug.
-9. **Mezo integration.** Pool, NFT manager, gauge, gauge voting reward, PoolsVoter, sMUSD and its strategy hook, CL router, MUSD, MEZO.
-10. **Next.** Mainnet with a cap, Aero on Base, sMUSD governance proposal.
+`docs/plumb-deck.pdf` (built from `docs/deck/build.py`): Plumb; the book today; when those positions leave; what changed since Wave 1; the vault; proof; who pays, who earns; safety; built on Mezo; team, status, next.
 
-## Pitch video script (2:00)
+## Video
 
-**0:00 to 0:15. The hook.** (Screen: observatory, sell table)
-"Mezo already pays MEZO emissions for MUSD liquidity. Plumb points that liquidity at the one thing it's missing: buyers. Today Mezo's main pool has 5.3 million MUSD for sale and thirty-eight thousand dollars of bids, so a hundred-thousand-MUSD sale gets thirty-eight thousand dollars."
-
-**0:15 to 0:35. October.** (Screen: depth history chart)
-"It wasn't always like this. For most of the last two months, that same sale paid about ninety-nine thousand. Since mid October the bid side has thinned: replay the pool at a block on October 22 and selling ten thousand MUSD would have paid eleven dollars. Every point on this chart comes from replaying the pool at that block."
-
-**0:35 to 1:05. Plumb.** (Screen: vault page, deposit on testnet)
-"Plumb is a buyer. You deposit stablecoins. The vault bids for MUSD just under the market, staked in the pool's gauge, so depositors earn MEZO. MUSD it buys earns in sMUSD, and it's only sold back at a dollar or more. No owner, no admin keys, and withdrawals are paid in kind any time."
-
-**1:05 to 1:25. Proof.** (Screen: terminal, fork test output)
-"On a fork of today's mainnet, a twenty-five thousand dollar deposit takes that hundred-thousand-MUSD sale from thirty-eight thousand to sixty-three thousand. When sellers push the price into the bid, it earns the pool's MEZO emissions; how much depends on how much other liquidity shares that range."
-
-**1:25 to 1:45. sMUSD.** (Screen: strategy test output)
-"Mezo's savings vault holds 7.4 million MUSD in its default strategy. Ours plugs into the same hook. It keeps 95 percent idle and only ever sells above a dollar. On the fork, the real owner switches to it in one call, and a full cycle pays savers a profit."
-
-**1:45 to 2:00. Close.** (Screen: roadmap slide)
-"Next: mainnet with a cap, the same vault on Aero, and a proposal to put sMUSD's idle MUSD to work. Plumb. The buyers MUSD is missing."
-
-## Recording checklist
-
-- Observatory at https://kinnuworks.github.io/plumb/ with live data
-- Testnet vault: one deposit, one rebalance, one withdrawal, each with its explorer link
-- `forge test --match-test test_depositMakesSellingMusdCheaper -vv` and `--match-test test_fullCycleEarnsForSavers -vv` in a terminal
+Script and shot list are kept with the project plan; the cut is under two minutes. Rough cut of the real wallet flow on testnet: `docs/roughcut/wallet-flow.webm`.
