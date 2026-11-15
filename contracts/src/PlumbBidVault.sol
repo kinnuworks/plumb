@@ -395,7 +395,7 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         // The band on the live price comes first: it earns the gauge's MEZO while MUSD trades
         // normally. It only uses MUSD it buys for itself, never inventory bought below $1.
         int24 bandCheapEdge;
-        if (bidding && bandWidth > 0) bandCheapEdge = _placeBand(spotTick, twapTick);
+        if (bidding && bandWidth > 0) bandCheapEdge = _placeBand(twapTick);
 
         (uint256 musdInAsk, uint256 parked) = _placeInventory(depeg, _depeg(spotTick));
 
@@ -438,29 +438,49 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     ///      USD budget into MUSD for the price's spot inside the range, never paying more for
     ///      MUSD than the TWAP price less the manipulation tolerance, and never more than $1.
     ///      Returns the band's cheap edge in depeg ticks, or 0 if no band was placed.
-    function _placeBand(int24 spotTick, int24 twapTick) internal returns (int24 cheapEdge) {
+    function _placeBand(int24 twapTick) internal returns (int24 cheapEdge) {
         uint256 budget = Math.mulDiv(usd.balanceOf(address(this)), bandBps, BPS);
         if (budget == 0) return 0;
 
-        int24 tl = PegMath.floorToSpacing(spotTick, tickSpacing) - ((bandWidth / tickSpacing - 1) / 2) * tickSpacing;
-        int24 tu = tl + bandWidth;
+        (int24 tl, int24 tu) = _bandRange();
 
-        uint256 toSwap = _bandSwapAmount(budget, tl, tu);
+        int24 a = _depeg(tl);
+        int24 b = _depeg(tu);
+        // The swap may not lift MUSD past the TWAP tolerance, past $1, or out of the band.
         int24 limitDepeg = _depeg(twapTick) - maxTwapDeviation;
         if (limitDepeg < 0) limitDepeg = 0;
-        (uint256 spent, uint256 bought) = _buyMusd(toSwap, limitDepeg);
-        // With the price on the band's edge the band is all USD and needs no swap. Otherwise a
-        // swap the limit refused leaves no MUSD to pair with, so there is no band this time.
-        if (toSwap > 0 && bought == 0) return 0;
+        if ((a < b ? a : b) > limitDepeg) limitDepeg = a < b ? a : b;
+        (uint256 spent, uint256 bought) = _buyMusd(_bandSwapAmount(budget, tl, tu), limitDepeg);
 
+        // On a thin pool the swap itself can carry the price to the band's edge. Re-centre on
+        // where it landed so the band is always in range.
+        (tl, tu) = _bandRange();
+        a = _depeg(tl);
+        b = _depeg(tu);
+
+        // Skip the band, rather than revert, if the tokens can't make any liquidity at the
+        // price the swap left (a limit cut the swap short). Unused MUSD joins the inventory.
+        if (_liquidityFor(tl, tu, budget - spent, bought) == 0) return 0;
         (uint256 tokenId, uint256 usdIn, uint256 musdIn) = _mintTicks(tl, tu, budget - spent, bought);
         band.tokenId = tokenId;
         band.staked = _stake(tokenId);
         emit BandPlaced(tokenId, tl, tu, usdIn, musdIn, spent);
-
-        int24 a = _depeg(tl);
-        int24 b = _depeg(tu);
         cheapEdge = a > b ? a : b;
+    }
+
+    /// @dev The tick slots around the live price that the band covers.
+    function _bandRange() internal view returns (int24 tl, int24 tu) {
+        (, int24 spot,,,,) = pool.slot0();
+        tl = PegMath.floorToSpacing(spot, tickSpacing) - ((bandWidth / tickSpacing - 1) / 2) * tickSpacing;
+        tu = tl + bandWidth;
+    }
+
+    function _liquidityFor(int24 tl, int24 tu, uint256 usdAmt, uint256 musdAmt) internal view returns (uint128) {
+        (uint160 sqrtP,,,,,) = pool.slot0();
+        (uint256 a0, uint256 a1) = usdIsToken0 ? (usdAmt, musdAmt) : (musdAmt, usdAmt);
+        return LiquidityAmounts.getLiquidityForAmounts(
+            sqrtP, TickMath.getSqrtRatioAtTick(tl), TickMath.getSqrtRatioAtTick(tu), a0, a1
+        );
     }
 
     /// @dev USD to swap so the rest of `budget` and the MUSD bought fill [tl, tu] in the ratio the
