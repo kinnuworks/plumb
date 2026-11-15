@@ -26,8 +26,8 @@ export default async function Observatory() {
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold">A standing bid under MUSD</h1>
         <p className="opacity-80 max-w-3xl">
-          Most of the buyers for MUSD on Mezo sit in one tick of the main MUSD/mUSDC pool: 7 of its 11 gauge-staked
-          positions, holding 94% of its liquidity. Below that tick the pool holds almost no USD. Plumb is a capped vault
+          Most of the buyers for MUSD on Mezo sit in one tick of the main MUSD/mUSDC pool: 6 of its 10 gauge-staked
+          positions, holding 93% of its liquidity. Below that tick the pool holds almost no USD. Plumb is a capped vault
           that lets anyone fund that buy side with mUSDC, and pays them the pool&apos;s MEZO rewards for it.
         </p>
         <p className="text-sm">
