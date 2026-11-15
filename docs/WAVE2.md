@@ -20,7 +20,7 @@ Fork test on Mezo mainnet state (`PlumbBand.fork.t.sol`, block 13,238,000), one 
 | Layout | MEZO earned |
 |---|---|
 | Wave 1 (bid only) | 0 |
-| Wave 2 (band + bid) | 3,508.8 |
+| Wave 2 (band + bid) | 3,975.5 |
 
 ```bash
 cd contracts && export MEZO_RPC_URL=https://mezo.drpc.org

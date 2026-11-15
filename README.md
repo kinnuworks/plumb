@@ -8,7 +8,7 @@ Almost all of MUSD's buyers on Mezo sit in one tick of the main MUSD/mUSDC pool.
 
 **Who it's for:** anyone on Mezo holding mUSDC who wants it to earn. The pool's gauge already pays about 87,350 MEZO a day for liquidity at the price; today a handful of positions collect it.
 
-**What it earns, and costs:** in a mainnet fork test, $20,000 deposited earned 3,509 MEZO in one quiet day after fees. At today's MEZO price (about 0.0030 MUSD in the MEZO/MUSD pool) that is about $10.50 a day, roughly 19% a year if emissions and price held. It falls as more liquidity joins that tick. The vault keeps 10% of MEZO as a fee, posts 10% back to the gauge's voters, and tips 1% to whoever calls `rebalance()`, which costs about $0.17 in gas. The risk is MUSD bought below $1, held until it sells at $1 or more.
+**What it earns, and costs:** in a mainnet fork test, $20,000 deposited earned 3,976 MEZO in one quiet day after fees. At today's MEZO price (about 0.0030 MUSD in the MEZO/MUSD pool) that is about $11.90 a day, roughly 21.7% a year if emissions and price held. It falls as more liquidity joins that tick. The vault keeps 10% of MEZO as a fee, posts 10% back to the gauge's voters, and tips 1% to whoever calls `rebalance()`, which costs under $0.20 in gas. The risk is MUSD bought below $1, held until it sells at $1 or more.
 
 **Safety:** no owner and no admin keys, every parameter fixed at deploy, deposits capped at 5,000 mUSDC. Not audited. A fresh review found one high, one medium and one low issue in the Wave 2 code; all are fixed, with tests ([SECURITY.md](contracts/SECURITY.md)). 77 unit and mainnet-fork tests and 10 invariant properties pass.
 
@@ -31,7 +31,7 @@ Check the Wave 2 claims yourself against Mezo mainnet state:
 ```bash
 cd contracts && export MEZO_RPC_URL=https://mezo.drpc.org
 forge test --match-test 'test_bandEarnsMezoWhileThePegHolds|test_backstopCatchesALargeSale' -vv
-# MEZO in a quiet day, band + bid: 3508831598460675540000
+# MEZO in a quiet day, band + bid: 3975545332527328000000
 # MEZO in a quiet day, bid only:   0
 # USD for 400k MUSD before: 111686626707
 # USD for 400k MUSD after:  161679450837

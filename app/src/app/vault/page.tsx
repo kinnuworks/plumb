@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { erc20Abi, formatUnits, parseUnits, zeroAddress } from "viem";
 import {
   useAccount,
@@ -139,6 +139,18 @@ function VaultView({ net }: { net: Net }) {
   const nextRebalance = lastRebalance !== undefined && interval !== undefined ? Number(lastRebalance) + interval : 0;
   const belowFloor = depeg !== undefined && floor !== undefined && depeg >= floor;
 
+  // Re-read balances, allowance and vault state once the transaction is mined, not just sent:
+  // otherwise Approve can stay on screen after the approval lands.
+  const mined = receipt.isSuccess;
+  const minedHash = receipt.data?.transactionHash;
+  useEffect(() => {
+    if (!mined) return;
+    reads.refetch();
+    usdBalance.refetch();
+    allowance.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mined, minedHash]);
+
   async function run(fn: () => Promise<unknown>) {
     setError(null);
     try {
@@ -154,9 +166,10 @@ function VaultView({ net }: { net: Net }) {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold">Plumb vault</h1>
         <p className="opacity-80">
-          Deposit mUSDC. Half goes into a band on MUSD&apos;s live price, staked in the pool&apos;s gauge so it earns MEZO
-          while MUSD trades normally. The rest is a bid from the band down to about $0.98. MUSD the vault buys below $1
-          waits in sMUSD and is offered back only at $1 or above. Withdrawals are paid in kind, any time. Pick the network above.
+          You deposit mUSDC. Half of it buys and sells MUSD right at today&apos;s price, which is where the pool pays its
+          MEZO rewards. The other half waits as an order to buy MUSD if the price drops, down to about $0.98. MUSD the vault
+          buys below $1 earns savings interest until it can be sold at $1 or more. Withdraw any time: you get your share of
+          whatever the vault holds, mUSDC and MUSD.
         </p>
       </header>
 
@@ -170,10 +183,10 @@ function VaultView({ net }: { net: Net }) {
         <h2 className="font-semibold mb-2">Vault</h2>
         <Row label="Total value" value={usd(totalAssets)} />
         <Row label="MUSD price (TWAP)" value={depeg === undefined ? "–" : `$${(1 - depeg / 10_000).toFixed(4)}`} />
-        <Row label="USD waiting" value={usd(holdings?.[0])} />
-        <Row label="On the price (band)" value={band ? `${usd(band[0])} + ${musd(band[1])}` : "–"} />
-        <Row label="USD bidding for MUSD" value={usd(holdings?.[3])} />
-        <Row label="MUSD bought, held" value={musd(holdings ? holdings[1] + holdings[2] + holdings[4] : undefined)} />
+        <Row label="At today's price (earns MEZO)" value={band ? `${usd(band[0])} + ${musd(band[1])}` : "–"} />
+        <Row label="Waiting to buy MUSD below the price" value={usd(holdings?.[3])} />
+        <Row label="New deposits, placed at the next rebalance" value={usd(holdings?.[0])} />
+        <Row label="MUSD bought below $1, earning in sMUSD" value={musd(holdings ? holdings[1] + holdings[2] + holdings[4] : undefined)} />
         <Row label="MUSD offered at $1 or more" value={musd(holdings?.[6])} />
         {belowFloor && <p className="text-sm pt-2">MUSD is below the floor price. Bids and deposits are paused.</p>}
       </section>
@@ -245,6 +258,12 @@ function VaultView({ net }: { net: Net }) {
               )}
             </div>
 
+            <p className="text-xs opacity-70">
+              {needsApproval
+                ? "Step 1 of 2: approve lets the vault take this much mUSDC from your wallet. Then deposit."
+                : "Step 2 of 2: deposit. Each new deposit amount needs its own approval first."}
+            </p>
+
             <div className="flex flex-wrap gap-2">
               <button
                 className="rounded-md border border-current/30 px-4 py-2 text-sm"
@@ -264,6 +283,10 @@ function VaultView({ net }: { net: Net }) {
                 Rebalance
               </button>
             </div>
+            <p className="text-xs opacity-70">
+              Rebalance moves the vault&apos;s orders back to today&apos;s price. Anyone can call it once per cooldown and
+              earns 1% of the MEZO it collects.
+            </p>
           </>
         )}
 
