@@ -9,6 +9,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {TickMath} from "@uniswap/v3-core/contracts/libraries/TickMath.sol";
+import {LiquidityAmounts} from "@uniswap/v3-periphery/contracts/libraries/LiquidityAmounts.sol";
 
 import {ICLPool, INonfungiblePositionManager, ICLGauge, IVotingReward} from "./interfaces/IMezoCL.sol";
 import {IMUSDSavingsRate} from "./interfaces/IMUSDSavingsRate.sol";
@@ -18,8 +19,10 @@ import {PegBook} from "./PegBook.sol";
 /// @title PlumbBidVault
 /// @notice Pooled buy-side liquidity for MUSD on Mezo's MUSD/USD concentrated-liquidity pool.
 ///
-/// Depositors supply a USD stablecoin. The vault places it as a bid just below MUSD's price,
-/// so anyone selling MUSD meets a deeper book. MUSD the vault buys is parked in the sMUSD
+/// Depositors supply a USD stablecoin. The vault splits it in two: a band on MUSD's live price
+/// (part of the USD is swapped to MUSD to fund it), staked in the gauge so it earns MEZO while
+/// MUSD trades normally, and a backstop bid from the band's cheap edge down to the floor, so
+/// anyone selling MUSD meets a deeper book. MUSD the vault buys is parked in the sMUSD
 /// savings vault for yield while MUSD trades below $1, and offered back only at $1 or above
 /// once the price recovers. Positions are staked in the pool's gauge, and the MEZO they earn
 /// is streamed to share holders.
@@ -57,6 +60,8 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         uint16 keeperBps; // share of MEZO to whoever rebalances
         uint32 minRebalanceInterval; // seconds
         uint256 depositCap; // most USD value the vault accepts; 0 for no cap
+        int24 bandWidth; // ticks covered by the band on the live price; 0 disables the band
+        uint16 bandBps; // share of free USD that funds the band
     }
 
     struct Position {
@@ -83,8 +88,11 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     uint16 public immutable keeperBps;
     uint32 public immutable minRebalanceInterval;
     uint256 public immutable depositCap;
+    int24 public immutable bandWidth;
+    uint16 public immutable bandBps;
     uint8 private immutable shareDecimals;
 
+    Position public band;
     Position public bid;
     Position public ask;
     uint256 public lastRebalance;
@@ -112,6 +120,9 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         uint256 musdParked
     );
     event BidsPaused(int24 depeg, uint256 inventoryBps);
+    event BandPlaced(
+        uint256 tokenId, int24 tickLower, int24 tickUpper, uint256 usdIn, uint256 musdIn, uint256 usdSwapped
+    );
     event Harvested(uint256 total, uint256 toHolders, uint256 toTreasury, uint256 toIncentives, uint256 toKeeper);
     event MezoClaimed(address indexed account, address indexed receiver, uint256 amount);
 
@@ -132,6 +143,10 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
                 || uint256(p.feeBps) + p.incentiveBps + p.keeperBps > 3_000
         ) revert BadParams();
         if (address(p.gauge) != address(0) && p.gauge.pool() != address(p.pool)) revert BadParams();
+        if (
+            p.bandWidth < 0 || p.bandWidth % tickSpacing != 0 || p.bandBps > BPS
+                || (p.bandWidth == 0) != (p.bandBps == 0)
+        ) revert BadParams();
 
         gauge = p.gauge;
         smusd = p.smusd;
@@ -148,6 +163,8 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         keeperBps = p.keeperBps;
         minRebalanceInterval = p.minRebalanceInterval;
         depositCap = p.depositCap;
+        bandWidth = p.bandWidth;
+        bandBps = p.bandBps;
         shareDecimals = IERC20Metadata(p.usd).decimals() + SHARE_DECIMALS_OFFSET;
     }
 
@@ -245,6 +262,12 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         (askUsd, askMusd) = _positionAmounts(ask.tokenId, sqrtTwap);
     }
 
+    /// @notice What the band on the live price holds, at the pool TWAP.
+    function bandHoldings() external view returns (uint256 bandUsd, uint256 bandMusd) {
+        (uint160 sqrtTwap,) = _twap();
+        (bandUsd, bandMusd) = _positionAmounts(band.tokenId, sqrtTwap);
+    }
+
     /// @notice MUSD's TWAP price in depeg ticks (positive = below $1, 1 tick is about 1 bp).
     function currentDepeg() external view returns (int24) {
         (, int24 twapTick) = _twap();
@@ -324,7 +347,10 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
             }
         }
 
-        (uint256 u, uint256 m) = _removeFraction(bid, shares, supply);
+        (uint256 u, uint256 m) = _removeFraction(band, shares, supply);
+        usdOut += u;
+        musdOut += m;
+        (u, m) = _removeFraction(bid, shares, supply);
         usdOut += u;
         musdOut += m;
         (u, m) = _removeFraction(ask, shares, supply);
@@ -357,16 +383,34 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
         lastRebalance = block.timestamp;
 
         _harvest(keeper);
+        _close(band);
         _close(bid);
         _close(ask);
         _claimParkedYield();
 
         int24 depeg = _depeg(twapTick);
-        int24 spotDepeg = _depeg(spotTick);
+        uint256 invBps = _inventoryBps(twapTick);
+        bool bidding = depeg < floorDepeg && invBps <= maxInventoryBps;
 
-        // Inventory: below par, park MUSD in sMUSD. Near or above par, offer it back at >= $1.
-        uint256 musdInAsk;
-        uint256 parked;
+        // The band on the live price comes first: it earns the gauge's MEZO while MUSD trades
+        // normally. It only uses MUSD it buys for itself, never inventory bought below $1.
+        int24 bandCheapEdge;
+        if (bidding && bandWidth > 0) bandCheapEdge = _placeBand(spotTick, twapTick);
+
+        (uint256 musdInAsk, uint256 parked) = _placeInventory(depeg, _depeg(spotTick));
+
+        uint256 usdInBid;
+        if (!bidding) {
+            emit BidsPaused(depeg, invBps);
+        } else {
+            usdInBid = _placeBackstop(depeg, _depeg(spotTick), bandCheapEdge);
+        }
+
+        emit Rebalanced(keeper, twapTick, depeg, bid.tokenId, ask.tokenId, usdInBid, musdInAsk, parked);
+    }
+
+    /// @dev Below par, parks MUSD in sMUSD. Near or above par, offers it back at >= $1.
+    function _placeInventory(int24 depeg, int24 spotDepeg) internal returns (uint256 musdInAsk, uint256 parked) {
         if (depeg > nearParDepeg) {
             parked = _park();
         } else {
@@ -376,23 +420,60 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
             (ask.tokenId, musdInAsk) = _placeAsk(hi - askWidth, hi, musd.balanceOf(address(this)));
             if (ask.tokenId != 0) ask.staked = _stake(ask.tokenId);
         }
+    }
 
-        // Bids, unless MUSD is below the floor or the vault already holds too much MUSD.
-        uint256 usdInBid;
-        uint256 invBps = _inventoryBps(twapTick);
-        if (depeg >= floorDepeg || invBps > maxInventoryBps) {
-            emit BidsPaused(depeg, invBps);
-        } else {
-            int24 cheapest = depeg > spotDepeg ? depeg : spotDepeg;
-            int24 lo = _bidStart(cheapest);
-            int24 hi = lo + bidWidth;
-            int24 floorEdge = PegMath.floorToSpacing(floorDepeg, tickSpacing);
-            if (hi > floorEdge) hi = floorEdge;
-            (bid.tokenId, usdInBid) = _placeBid(lo, hi, usd.balanceOf(address(this)));
-            if (bid.tokenId != 0) bid.staked = _stake(bid.tokenId);
-        }
+    /// @dev The bid from the band's cheap edge (or just under the market) down to the floor.
+    function _placeBackstop(int24 depeg, int24 spotDepeg, int24 bandCheapEdge) internal returns (uint256 usdInBid) {
+        int24 cheapest = depeg > spotDepeg ? depeg : spotDepeg;
+        int24 lo = _bidStart(cheapest);
+        if (bandCheapEdge > lo) lo = bandCheapEdge;
+        int24 hi = lo + bidWidth;
+        int24 floorEdge = PegMath.floorToSpacing(floorDepeg, tickSpacing);
+        if (hi > floorEdge) hi = floorEdge;
+        (bid.tokenId, usdInBid) = _placeBid(lo, hi, usd.balanceOf(address(this)));
+        if (bid.tokenId != 0) bid.staked = _stake(bid.tokenId);
+    }
 
-        emit Rebalanced(keeper, twapTick, depeg, bid.tokenId, ask.tokenId, usdInBid, musdInAsk, parked);
+    /// @dev Places the band over the tick slots around the live price. Swaps just enough of its
+    ///      USD budget into MUSD for the price's spot inside the range, never paying more for
+    ///      MUSD than the TWAP price less the manipulation tolerance, and never more than $1.
+    ///      Returns the band's cheap edge in depeg ticks, or 0 if no band was placed.
+    function _placeBand(int24 spotTick, int24 twapTick) internal returns (int24 cheapEdge) {
+        uint256 budget = Math.mulDiv(usd.balanceOf(address(this)), bandBps, BPS);
+        if (budget == 0) return 0;
+
+        int24 tl = PegMath.floorToSpacing(spotTick, tickSpacing) - ((bandWidth / tickSpacing - 1) / 2) * tickSpacing;
+        int24 tu = tl + bandWidth;
+
+        uint256 toSwap = _bandSwapAmount(budget, tl, tu);
+        int24 limitDepeg = _depeg(twapTick) - maxTwapDeviation;
+        if (limitDepeg < 0) limitDepeg = 0;
+        (uint256 spent, uint256 bought) = _buyMusd(toSwap, limitDepeg);
+        // With the price on the band's edge the band is all USD and needs no swap. Otherwise a
+        // swap the limit refused leaves no MUSD to pair with, so there is no band this time.
+        if (toSwap > 0 && bought == 0) return 0;
+
+        (uint256 tokenId, uint256 usdIn, uint256 musdIn) = _mintTicks(tl, tu, budget - spent, bought);
+        band.tokenId = tokenId;
+        band.staked = _stake(tokenId);
+        emit BandPlaced(tokenId, tl, tu, usdIn, musdIn, spent);
+
+        int24 a = _depeg(tl);
+        int24 b = _depeg(tu);
+        cheapEdge = a > b ? a : b;
+    }
+
+    /// @dev USD to swap so the rest of `budget` and the MUSD bought fill [tl, tu] in the ratio the
+    ///      live price needs.
+    function _bandSwapAmount(uint256 budget, int24 tl, int24 tu) internal view returns (uint256) {
+        (uint160 sqrtP,,,,,) = pool.slot0();
+        (uint256 a0, uint256 a1) = LiquidityAmounts.getAmountsForLiquidity(
+            sqrtP, TickMath.getSqrtRatioAtTick(tl), TickMath.getSqrtRatioAtTick(tu), 1e18
+        );
+        (uint256 usdPerL, uint256 musdPerL) = usdIsToken0 ? (a0, a1) : (a1, a0);
+        uint256 musdValuePerL = PegMath.musdToUsd(musdPerL, sqrtP, usdIsToken0);
+        if (usdPerL + musdValuePerL == 0) return 0;
+        return Math.mulDiv(budget, musdValuePerL, usdPerL + musdValuePerL);
     }
 
     function _close(Position storage pos) internal {
@@ -449,6 +530,7 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     ///      swap fees on unstaked positions and sMUSD yield. Called before any share is priced
     ///      or redeemed, so income always belongs to the holders who earned it.
     function _realiseIncome() internal {
+        _sweepFees(band.tokenId, band.staked);
         _sweepFees(bid.tokenId, bid.staked);
         _sweepFees(ask.tokenId, ask.staked);
         _claimParkedYield();
@@ -483,8 +565,9 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     function _totalAssetsAt(uint160 sqrtTwap) internal view returns (uint256) {
         (uint256 bu, uint256 bm) = _positionAmounts(bid.tokenId, sqrtTwap);
         (uint256 au, uint256 am) = _positionAmounts(ask.tokenId, sqrtTwap);
-        uint256 usdTotal = usd.balanceOf(address(this)) + bu + au;
-        uint256 musdTotal = musd.balanceOf(address(this)) + _parkedBalance() + bm + am;
+        (uint256 nu, uint256 nm) = _positionAmounts(band.tokenId, sqrtTwap);
+        uint256 usdTotal = usd.balanceOf(address(this)) + bu + au + nu;
+        uint256 musdTotal = musd.balanceOf(address(this)) + _parkedBalance() + bm + am + nm;
         return usdTotal + _musdValue(musdTotal, sqrtTwap);
     }
 
@@ -507,6 +590,7 @@ contract PlumbBidVault is PegBook, ERC20, ReentrancyGuard {
     function _harvest(address keeper) internal {
         if (address(gauge) == address(0)) return;
         // A gauge that fails to pay must not block exits or transfers; rewards stay claimable.
+        if (band.staked) try gauge.getReward(band.tokenId) {} catch {}
         if (bid.staked) try gauge.getReward(bid.tokenId) {} catch {}
         if (ask.staked) try gauge.getReward(ask.tokenId) {} catch {}
         uint256 gross = mezo.balanceOf(address(this)) - mezoLiabilities;

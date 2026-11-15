@@ -38,6 +38,11 @@ abstract contract PegBook is IERC721Receiver {
     error NotSingleSided();
     error UnexpectedNft();
     error BadPool();
+    error UnexpectedCallback();
+
+    /// @dev Set only while this contract's own swap is running, so the pool's callback can
+    ///      never be used to pull tokens at any other time.
+    bool private _inSwap;
 
     constructor(
         ICLPool pool_,
@@ -153,6 +158,14 @@ abstract contract PegBook is IERC721Receiver {
         returns (uint256 tokenId, uint256 usdUsed, uint256 musdUsed)
     {
         (int24 tickLower, int24 tickUpper) = PegMath.toTickRange(depegLo, depegHi, parTick, dir);
+        return _mintTicks(tickLower, tickUpper, usdAmount, musdAmount);
+    }
+
+    /// @dev Mints a position over pool ticks [tickLower, tickUpper] with up to the given amounts.
+    function _mintTicks(int24 tickLower, int24 tickUpper, uint256 usdAmount, uint256 musdAmount)
+        internal
+        returns (uint256 tokenId, uint256 usdUsed, uint256 musdUsed)
+    {
         (uint256 a0, uint256 a1) = usdIsToken0 ? (usdAmount, musdAmount) : (musdAmount, usdAmount);
 
         if (usdAmount > 0) usd.forceApprove(address(nfpm), usdAmount);
@@ -180,6 +193,30 @@ abstract contract PegBook is IERC721Receiver {
 
         if (usdAmount > 0) usd.forceApprove(address(nfpm), 0);
         if (musdAmount > 0) musd.forceApprove(address(nfpm), 0);
+    }
+
+    /// @dev Buys MUSD with up to `usdIn` USD from the pool, stopping at `limitDepeg` (the
+    ///      dearest MUSD price the caller accepts, in depeg ticks). Buys nothing if the price is
+    ///      already at or past the limit.
+    function _buyMusd(uint256 usdIn, int24 limitDepeg) internal returns (uint256 usdSpent, uint256 musdOut) {
+        if (usdIn == 0) return (0, 0);
+        (, int24 spot,,,,) = pool.slot0();
+        if (_depeg(spot) <= limitDepeg) return (0, 0);
+        uint160 limit = TickMath.getSqrtRatioAtTick(PegMath.toTick(limitDepeg, parTick, dir));
+        _inSwap = true;
+        // Paying USD: if USD is token0 that is a zeroForOne swap.
+        (int256 a0, int256 a1) = pool.swap(address(this), usdIsToken0, int256(usdIn), limit, "");
+        _inSwap = false;
+        (int256 du, int256 dm) = usdIsToken0 ? (a0, a1) : (a1, a0);
+        usdSpent = du > 0 ? uint256(du) : 0;
+        musdOut = dm < 0 ? uint256(-dm) : 0;
+    }
+
+    /// @dev Pays the pool for a swap this contract started. Only USD is ever owed.
+    function uniswapV3SwapCallback(int256 amount0, int256 amount1, bytes calldata) external {
+        if (msg.sender != address(pool) || !_inSwap) revert UnexpectedCallback();
+        int256 owed = usdIsToken0 ? amount0 : amount1;
+        if (owed > 0) usd.safeTransfer(msg.sender, uint256(owed));
     }
 
     /// @dev Removes `liquidity` from `tokenId` and collects everything owed. Burns the NFT if empty.
